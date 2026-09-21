@@ -70,6 +70,19 @@ export class Animal {
   /** Une lueur brève sur l'animal : il vient d'être observé. */
   halo(duree) { this.lumiere.halo(duree); }
 
+  /** À appeler quand il quitte la scène : libérer ce que CET individu possède en propre. */
+  detruire() {
+    this.mixer.stopAllAction();
+    // Géométrie et matériaux : rien à libérer. La géométrie est partagée avec le modèle en
+    // cache (le clone n'en fait pas de copie). Les matériaux sont des copies, mais une copie
+    // de matériau ne possède rien sur le GPU — et la « disposer » détruirait le programme de
+    // shader qu'elle partage avec les autres, recompilé au prochain animal (une saccade).
+    // Le squelette, lui, est propre à chaque copie : les matrices de ses os sont envoyées au
+    // GPU sous forme de texture. Sans dispose(), une texture par animal passé resterait
+    // allouée à jamais — un site qu'on laisse ouvert des heures finirait par ramer.
+    this.objet.traverse((o) => { if (o.isSkinnedMesh) o.skeleton.dispose(); });
+  }
+
   placer() {
     const u = Math.min(this.u, 1);
     this.trajectoire.getPointAt(u, this.objet.position);

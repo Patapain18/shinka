@@ -138,8 +138,14 @@ export class Banc {
 
   halo(duree) { this.lumiere.halo(duree); }
 
+  /** À appeler quand le banc quitte la scène : libérer ce qu'il possède en propre. */
   detruire() {
+    // La géométrie est une copie propre à ce banc (elle porte l'attribut aPhase) : ses
+    // tampons GPU sont à libérer. dispose() sur le maillage libère EN PLUS le tampon des
+    // matrices d'instances, qui n'appartient pas à la géométrie mais à l'InstancedMesh.
+    // Le matériau, lui, ne possède rien sur le GPU : le « disposer » ne ferait que détruire
+    // le programme de shader partagé, recompilé au banc suivant (une saccade pour rien).
     this.maillage.geometry.dispose();
-    this.maillage.material.dispose();
+    this.maillage.dispose();
   }
 }

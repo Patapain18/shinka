@@ -11,6 +11,8 @@
    Étape 7 : l'audio (ambiance générée, sons, musique CC0).
    Étape 9 : les événements rares (banc de sardines, géant, eau trouble).
    Étape 10 : post-processing (rendu.js), qualité adaptative (qualite.js), tactile.
+   Robustesse : contexte WebGL perdu (bandeau), libération GPU des animaux retirés
+   (animal.js, banc.js), qualité au choix du visiteur (bouton du HUD).
    ============================================ */
 
 import * as THREE from 'three';
@@ -35,9 +37,11 @@ import { reglages, sauverReglages } from './collection.js';
 const entree    = document.getElementById('entree');
 const btnEntrer = document.getElementById('btn-entrer');
 
+const canvas    = document.getElementById('scene');
+
 let renderer;
 try {
-  renderer = creerRenderer(document.getElementById('scene'));
+  renderer = creerRenderer(canvas);
 } catch (err) {
   console.error(err);
   btnEntrer.replaceWith(Object.assign(document.createElement('p'), {
@@ -47,20 +51,25 @@ try {
   throw err;   // on arrête tout ici : rien d'autre n'a de sens sans renderer
 }
 
+/* ---------- Perte du contexte WebGL ---------- */
+// Mise en veille, pilote graphique qui redémarre, trop d'onglets 3D ouverts : le navigateur
+// peut retirer le contexte WebGL sans prévenir. Three cesse alors de dessiner (image figée
+// ou noire) et demande au navigateur de le restaurer — ce qui arrive parfois, pas toujours.
+// Entre les deux, le visiteur doit savoir ce qui se passe, et pouvoir recharger.
+const bandeauContexte = document.getElementById('contexte-perdu');
+canvas.addEventListener('webglcontextlost', () => { bandeauContexte.hidden = false; });
+canvas.addEventListener('webglcontextrestored', () => { bandeauContexte.hidden = true; });   // Three a tout recréé : la boucle repart seule
+document.getElementById('contexte-recharger').addEventListener('click', () => location.reload());
+
 /* ---------- L'eau : sol, rayons, particules ---------- */
 const eau = creerEau(scene, camera);
 
-/* ---------- Post-processing (bloom, vitre) et qualité ---------- */
+/* ---------- Post-processing (bloom, vitre) ---------- */
 const rendu = creerRendu(renderer, scene, camera);
 function redimensionnerTout() {
   redimensionner(renderer);
   rendu.redimensionner();
 }
-const qualite = creerQualite({
-  rendu, renderer, eau, redimensionner: redimensionnerTout,
-  reglages: reglages(), sauverReglages,
-  hud: document.getElementById('hud-qualite'),
-});
 
 /* ---------- L'heure réelle → la lumière ---------- */
 const horloge = creerHorloge({ scene, lumieres, eau, renderer });
@@ -86,6 +95,19 @@ const audio = creerAudio();
 /* ---------- UI (curseur, toasts, compteur) et observation ---------- */
 const ui = creerUI();
 ui.majCompteur(nombreObservees(), ESPECES.length);
+
+/* ---------- Qualité : haute / basse — l'URL, le visiteur (bouton du HUD), sinon l'auto ---------- */
+const qualite = creerQualite({
+  rendu, renderer, eau, redimensionner: redimensionnerTout,
+  reglages: reglages(), sauverReglages,
+  bouton: document.getElementById('hud-qualite'),
+  // L'auto vient de descendre : on le dit (si on est entré : avant, l'écran d'entrée cache tout)
+  surBascule: () => {
+    if (document.body.classList.contains('entre')) {
+      ui.toast({ titre: 'Qualité réduite pour rester fluide', nom: 'le bouton « qualité » du HUD permet de revenir', discret: true, duree: 6000 });
+    }
+  },
+});
 
 const observation = creerObservation({
   camera,
@@ -198,7 +220,7 @@ function demo(temps) {
 }
 
 /* ---------- Poignée pour les outils de test (outils/*.mjs) ---------- */
-window.__shinka = { camera, get spawner() { return spawner; }, observation, horloge, carnet, audio, evenements, qualite, rendu };
+window.__shinka = { renderer, scene, camera, especes: ESPECES, get spawner() { return spawner; }, observation, horloge, carnet, audio, evenements, qualite, rendu };
 
 /* ---------- Boucle ---------- */
 const chrono = new THREE.Clock();   // le chronomètre de la boucle (l'horloge du jour, c'est `horloge`)

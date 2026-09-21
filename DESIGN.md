@@ -325,10 +325,21 @@ via un filtre CSS, et pour la fiche débloquée.
   (aberration chromatique aux bords, reflet oblique qui glisse avec la parallaxe, vignette, grain) → `OutputPass`
   (tone mapping + sRGB : le renderer ne les applique plus quand il dessine dans une image intermédiaire).
   Coupé en qualité basse (`qualite.js`) : rendu direct, pixel ratio 1, moitié de la neige marine.
+  Qui décide du niveau, par priorité : `?qualite=` (fige, efface le choix mémorisé) → le bouton « qualité » du HUD
+  (choix du visiteur, mémorisé) → l'auto (haute au départ ; si la **médiane** des durées de frame passe sous 36 fps
+  après 5 s, basse **pour cette visite seulement** — jamais mémorisé : une machine encombrée un soir n'est pas lente).
 - **Leçon apprise (étape 2)** : dans un `ShaderMaterial` avec `fog: true`, il FAUT les uniforms `UniformsLib.fog` (sinon Three plante au rendu),
   et l'ordre en fin de fragment est `tonemapping → colorspace → fog` (Three fournit `fogColor` déjà en sRGB).
 - **Perf** : `pixelRatio` ≤ 1,5 ; max 12 animaux ; bancs en `InstancedMesh` ; modèles chargés à la
   première apparition puis mis en cache ; option « qualité » (bloom off) si ça rame.
+- **Robustesse (site laissé ouvert des heures)** : chaque objet retiré libère ce qu'il possède en propre —
+  `Animal.detruire()` : `skeleton.dispose()` (la texture d'os créée par copie ; sans ça, une texture GPU par animal
+  passé restait allouée à jamais) ; `Banc.detruire()` : `geometry.dispose()` + `InstancedMesh.dispose()` (tampon des
+  matrices d'instances). **Jamais** `material.dispose()` sur une copie de matériau : elle ne possède rien sur le GPU,
+  et ça détruirait le programme de shader partagé (recompilé au prochain animal = saccade).
+  Contexte WebGL perdu (veille, pilote) : Three cesse de dessiner et demande la restauration ; `main.js` affiche le
+  bandeau `#contexte-perdu` (bouton Recharger) et le cache au `webglcontextrestored`.
+  Test : `node outils/test-robustesse.mjs sortie.png`.
 
 ---
 
@@ -364,7 +375,7 @@ Chaque étape donne quelque chose de visible et qui marche. On n'attaque pas la 
 | 7 | ✅ 2026-09-21 — `audio.js` : ambiance et sons **générés** (Web Audio : bruit brun filtré qui respire, sub, bulles, carillon, tic, grondement), 6 morceaux CC0 d'archive.org (`playlist.js`, `audio/music/CREDITS.md`), deux lecteurs à fondu enchaîné de 4 s, filtre « sous l'eau », player + crédits, volume/mute persistés | L'ambiance est là |
 | 8 | ~~Premier vrai modèle~~ → fusionné dans l'étape 3 : le requin généré (`models/requin-recif.glb`) est disponible dès maintenant, plus besoin de placeholders | ✅ pipeline validé le 2026-09-21 |
 | 9 | ✅ 2026-09-21 — `evenements.js` (toutes les 12-25 min, `?evenement=banc\|geant\|trouble`) : banc de 300 sardines en tourbillon (`banc.js` : InstancedMesh + nage en vertex shader + rotation autour d'un centre), baleine à bosse au loin avec son chant, eau trouble (modulation brume/soleil/rayons/neige) ; sardine en espèce commune (banc de 150) ; `lumiere.js` partagé | Les surprises |
-| 10 | ✅ 2026-09-21 — `rendu.js` (EffectComposer : bloom 0,28 / seuil 0,85, passe « vitre » : aberration chromatique, reflet oblique lié à la parallaxe, vignette, grain, OutputPass), `qualite.js` (haute/basse, auto : < 36 fps pendant 5 s → basse, mémorisé, `?qualite=`), tactile (toucher et maintenir, `touch-action: none`), mise en page ≤ 640 px, README, `.nojekyll`. Publication GitHub Pages : à faire avec l'accord de Mathis | En ligne |
+| 10 | ✅ 2026-09-21 — `rendu.js` (EffectComposer : bloom 0,28 / seuil 0,85, passe « vitre » : aberration chromatique, reflet oblique lié à la parallaxe, vignette, grain, OutputPass), `qualite.js` (haute/basse, auto : médiane < 36 fps → basse pour la visite, bouton du HUD mémorisé, `?qualite=`), tactile (toucher et maintenir, `touch-action: none`), mise en page ≤ 640 px, README, `.nojekyll`. Publication GitHub Pages : à faire avec l'accord de Mathis | En ligne |
 
 Le premier `.glb` existe déjà : l'étape 3 charge directement le requin (GLTFLoader + AnimationMixer).
 
@@ -380,6 +391,8 @@ protocole DevTools : la page vit, on attend, on capture, et la console de la pag
 - `node outils/test-observation.mjs sortie.png` — scénario bout-en-bout : la souris suit un animal
   3,5 s, on vérifie compteur + toast. Écrit aussi `sortie-jauge.png` (anneau en cours).
 - `node outils/test-carnet.mjs sortie.png` — scénario : touche C, capture de la grille, ouverture d'une fiche.
+- `node outils/test-robustesse.mjs sortie.png` — mémoire GPU (textures d'os libérées au départ des animaux),
+  contexte WebGL perdu/restauré (`WEBGL_lose_context`), bouton de qualité (bascule + mémorisation).
 - `node outils/vignettes.mjs [id …]` — génère `models/<id>.png` (512×512, fond transparent, profil) pour le carnet.
   À relancer après chaque nouveau modèle. La silhouette « ??? » est la même image noircie en CSS.
 - `outils/chrome.mjs` — la bibliothèque commune (`piloter()` : naviguer, evaluer, souris, capturer).

@@ -62,8 +62,16 @@
     })();
   </script>
 
-  <!-- HUD discret : l'heure et la phase du bassin, et l'avancement de la collection -->
-  <div class="hud" aria-hidden="true"><span id="hud-heure"></span><span class="hud-sep">·</span><span id="hud-collection"></span><span id="hud-qualite" class="hud-qualite"></span></div>
+  <!-- Contexte WebGL perdu (mise en veille, pilote graphique…) : Three cesse de dessiner.
+       On le dit, et on propose de recharger — la collection est dans localStorage, rien n'est perdu. -->
+  <div id="contexte-perdu" class="bandeau" hidden>
+    <span>Le rendu 3D s’est interrompu (mise en veille ou pilote graphique). Si l’image ne revient pas d’elle-même :</span>
+    <button id="contexte-recharger" type="button">Recharger</button>
+  </div>
+
+  <!-- HUD discret : l'heure et la phase du bassin, l'avancement de la collection,
+       et le bouton de qualité (haute / basse — le seul élément du HUD qui reçoit la souris) -->
+  <div class="hud"><span id="hud-heure"></span><span class="hud-sep">·</span><span id="hud-collection"></span><button id="hud-qualite" class="hud-qualite" type="button" title="Changer la qualité du rendu"></button></div>
 
   <!-- Le curseur : un anneau qui se remplit quand on observe un animal -->
   <div id="curseur" class="curseur" aria-hidden="true">

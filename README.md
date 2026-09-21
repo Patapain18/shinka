@@ -25,6 +25,12 @@ Un serveur est nécessaire : les modules ES ne se chargent pas depuis `file://`.
 `?direct` (sans écran d'entrée) · `?heure=23` / `?tempo=600` (horloge) · `?forcer=meduse`
 (faire entrer une espèce) · `?evenement=banc|geant|trouble` · `?qualite=haute|basse`.
 
+## Qualité du rendu
+
+Le site démarre en qualité haute (bloom, vitre) et passe seul en basse si la machine ne suit pas,
+pour la visite en cours. Le bouton « qualité » en bas à gauche bascule entre haute et basse ;
+ce choix-là est mémorisé.
+
 ## Crédits
 
 - Musique : six morceaux CC0 (domaine public), voir [audio/music/CREDITS.md](audio/music/CREDITS.md).

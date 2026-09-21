@@ -444,7 +444,52 @@ body.carnet-ouvert .curseur { opacity: 0; }
 .credits a:hover { border-bottom-color: var(--ecume); }
 .credits p { margin-top: .7rem; font-size: .72rem; color: var(--brume); }
 
+/* Le bouton de qualité vit dans le HUD, qui ignore la souris : lui seul la reçoit */
+.hud-qualite {
+  pointer-events: auto;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.hud-qualite:hover, .hud-qualite:focus-visible { color: var(--ecume); outline: none; }
 .hud-qualite:not(:empty)::before { content: '·'; margin: 0 .6em; opacity: .5; }
+
+/* ---------- Bandeau neutre en haut (contexte WebGL perdu) : ce n'est pas une erreur du site ---------- */
+.bandeau {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  max-width: 70ch;
+  padding: .6rem 1.2rem;
+  border: 1px solid rgba(217, 236, 245, .35);
+  border-radius: 8px;
+  background: rgba(2, 7, 12, .8);
+  backdrop-filter: blur(8px);
+  font-size: .8rem;
+  line-height: 1.5;
+  color: var(--ecume);
+}
+.bandeau button {
+  flex: none;
+  padding: .35rem .9rem;
+  border: 1px solid rgba(217, 236, 245, .5);
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.bandeau button:hover, .bandeau button:focus-visible { background: rgba(217, 236, 245, .12); outline: none; }
 
 /* ---------- Petits écrans ---------- */
 @media (max-width: 640px) {
@@ -452,7 +497,8 @@ body.carnet-ouvert .curseur { opacity: 0; }
   .player { bottom: 12px; gap: 8px; padding: .4rem .5rem .4rem .7rem; }
   .player-titre { display: none; }
   .player-volume { width: 64px; }
-  .hud { left: 14px; bottom: 62px; font-size: .6rem; }
+  .hud { left: 14px; bottom: 62px; font-size: .6rem; max-width: calc(100% - 28px); line-height: 1.8; }
+  .bandeau { max-width: calc(100% - 32px); flex-wrap: wrap; gap: .6rem; }
   .btn-carnet { right: 14px; bottom: auto; top: 14px; }      /* en haut : la place en bas est prise */
   .toasts { bottom: 108px; width: calc(100% - 32px); }
   .toast { padding: .7rem 1.2rem; }

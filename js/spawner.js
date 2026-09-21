@@ -121,8 +121,7 @@ export function creerSpawner(scene, camera, horloge, { surEntree } = {}) {
   function retirer(indice) {
     const animal = animaux[indice];
     scene.remove(animal.objet);
-    animal.mixer?.stopAllAction();     // un Animal a un mixer…
-    animal.detruire?.();               // …un Banc a une géométrie à libérer
+    animal.detruire();   // chacun libère ce qu'il possède en propre (Animal : squelette ; Banc : géométrie)
     animaux.splice(indice, 1);
   }
 
@@ -138,7 +137,8 @@ export function creerSpawner(scene, camera, horloge, { surEntree } = {}) {
   return {
     animaux,
     faireEntrer,
-    /** Un objet animé venu d'ailleurs (un événement) : le spawner le fait vivre et le retire à la fin. */
+    /** Un objet animé venu d'ailleurs (un événement) : le spawner le fait vivre et le retire à la fin.
+        Contrat : { objet, maj(dt), fini, detruire() } — comme Animal et Banc. */
     ajouter(objetAnime) { scene.add(objetAnime.objet); animaux.push(objetAnime); },
     maj(dt) {
       maintenant += dt;
