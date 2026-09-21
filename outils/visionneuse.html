@@ -83,7 +83,11 @@
       camera.near = rayon / 50; camera.far = rayon * 200; camera.updateProjectionMatrix();
       controls.target.copy(centre); controls.update();
       grille.position.y = boite.min.y - 0.01;
-      if (rayon < 0.6) scene.add(Object.assign(new THREE.GridHelper(2, 20, 0x2a4a5c, 0x16303d), { position: grille.position.clone() }));   // grille fine de 10 cm
+      if (rayon < 0.6) {                                   // petit modèle : grille fine de 10 cm en plus
+        const fine = new THREE.GridHelper(2, 20, 0x2a4a5c, 0x16303d);
+        fine.position.copy(grille.position);
+        scene.add(fine);
+      }
       let triangles = 0;
       gltf.scene.traverse(o => { if (o.isMesh) triangles += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; });
       infos.textContent = `modèle : ${modele}.glb`;
