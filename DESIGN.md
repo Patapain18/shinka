@@ -321,7 +321,10 @@ via un filtre CSS, et pour la fiche débloquée.
 - **Particules** : 2 000 points en suspension (« neige marine ») qui dérivent, + bulles occasionnelles.
 - **Vitre** : vignette, très léger reflet spéculaire en haut, distorsion minime aux bords,
   grain de film (comme `lusion_clone`).
-- **Post-processing** : `EffectComposer` → `RenderPass` → `UnrealBloomPass` (faible, 0,3) → passe custom (vignette, grain).
+- **Post-processing** (`rendu.js`) : `EffectComposer` → `RenderPass` → `UnrealBloomPass` (0,28, seuil 0,85) → passe « vitre »
+  (aberration chromatique aux bords, reflet oblique qui glisse avec la parallaxe, vignette, grain) → `OutputPass`
+  (tone mapping + sRGB : le renderer ne les applique plus quand il dessine dans une image intermédiaire).
+  Coupé en qualité basse (`qualite.js`) : rendu direct, pixel ratio 1, moitié de la neige marine.
 - **Leçon apprise (étape 2)** : dans un `ShaderMaterial` avec `fog: true`, il FAUT les uniforms `UniformsLib.fog` (sinon Three plante au rendu),
   et l'ordre en fin de fragment est `tonemapping → colorspace → fog` (Three fournit `fogColor` déjà en sRGB).
 - **Perf** : `pixelRatio` ≤ 1,5 ; max 12 animaux ; bancs en `InstancedMesh` ; modèles chargés à la
@@ -361,7 +364,7 @@ Chaque étape donne quelque chose de visible et qui marche. On n'attaque pas la 
 | 7 | ✅ 2026-09-21 — `audio.js` : ambiance et sons **générés** (Web Audio : bruit brun filtré qui respire, sub, bulles, carillon, tic, grondement), 6 morceaux CC0 d'archive.org (`playlist.js`, `audio/music/CREDITS.md`), deux lecteurs à fondu enchaîné de 4 s, filtre « sous l'eau », player + crédits, volume/mute persistés | L'ambiance est là |
 | 8 | ~~Premier vrai modèle~~ → fusionné dans l'étape 3 : le requin généré (`models/requin-recif.glb`) est disponible dès maintenant, plus besoin de placeholders | ✅ pipeline validé le 2026-09-21 |
 | 9 | ✅ 2026-09-21 — `evenements.js` (toutes les 12-25 min, `?evenement=banc\|geant\|trouble`) : banc de 300 sardines en tourbillon (`banc.js` : InstancedMesh + nage en vertex shader + rotation autour d'un centre), baleine à bosse au loin avec son chant, eau trouble (modulation brume/soleil/rayons/neige) ; sardine en espèce commune (banc de 150) ; `lumiere.js` partagé | Les surprises |
-| 10 | Polish : post-processing, vitre, perf, version tablette/mobile minimale, déploiement GitHub Pages | En ligne |
+| 10 | ✅ 2026-09-21 — `rendu.js` (EffectComposer : bloom 0,28 / seuil 0,85, passe « vitre » : aberration chromatique, reflet oblique lié à la parallaxe, vignette, grain, OutputPass), `qualite.js` (haute/basse, auto : < 36 fps pendant 5 s → basse, mémorisé, `?qualite=`), tactile (toucher et maintenir, `touch-action: none`), mise en page ≤ 640 px, README, `.nojekyll`. Publication GitHub Pages : à faire avec l'accord de Mathis | En ligne |
 
 Le premier `.glb` existe déjà : l'étape 3 charge directement le requin (GLTFLoader + AnimationMixer).
 

@@ -26,13 +26,20 @@ export function creerObservation({ camera, animauxVisibles, ui, surObservation }
   let progression = 0;       // 0 → 1
   let actif = true;          // faux quand le carnet est ouvert : on ne « regarde » plus le bassin
 
-  window.addEventListener('pointermove', (e) => {
+  function suivre(e) {
     souris.x = (e.clientX / window.innerWidth) * 2 - 1;
     souris.y = -(e.clientY / window.innerHeight) * 2 + 1;
     sourisDedans = true;
     ui.curseur.deplacer(e.clientX, e.clientY);
     ui.curseur.visible(true);
-  });
+  }
+  window.addEventListener('pointermove', suivre);
+  // Tactile : pas de survol. « Garder le curseur » devient « toucher et maintenir » —
+  // l'anneau se remplit tant que le doigt reste sur l'animal (et le suit).
+  window.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') suivre(e); });
+  const lacher = (e) => { if (e.pointerType === 'touch') { sourisDedans = false; ui.curseur.visible(false); } };
+  window.addEventListener('pointerup', lacher);
+  window.addEventListener('pointercancel', lacher);
   document.addEventListener('pointerleave', () => { sourisDedans = false; ui.curseur.visible(false); });
 
   /** L'animal le plus proche dont la sphère est traversée par le rayon de la souris. */

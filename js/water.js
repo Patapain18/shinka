@@ -290,6 +290,9 @@ function creerNeige(scene) {
       materiau.opacity = 0.55 * facteur;
       materiau.size = 0.07 * (1 + 0.35 * (facteur - 1));
     },
+    densite(fraction) {                                     // qualité basse : on n'en dessine qu'une partie
+      geometrie.setDrawRange(0, Math.floor(NOMBRE * fraction));
+    },
   };
 }
 
@@ -354,10 +357,11 @@ export function creerEau(scene, camera) {
     },
     // Multiplicateurs (1 = plein jour), appliqués par daytime.js (heure) et evenements.js (trouble).
     // Chaque clé est optionnelle : on ne touche qu'à ce qu'on reçoit.
-    regler({ rayons: fRayons, caustiques: fCaustiques, neige: fNeige } = {}) {
+    regler({ rayons: fRayons, caustiques: fCaustiques, neige: fNeige, densiteNeige } = {}) {
       if (fRayons !== undefined) rayons.regler(fRayons);
       if (fCaustiques !== undefined) sol.material.uniforms.uIntensite.value = sol.userData.intensiteBase * fCaustiques;
       if (fNeige !== undefined) neige.regler(fNeige);
+      if (densiteNeige !== undefined) neige.densite(densiteNeige);
     },
   };
 }

@@ -5,7 +5,7 @@
    {
      version: 1,
      observations: { 'requin-recif': { premiere: '2026-09-21T14:03:00.000Z', compte: 3 }, … },
-     reglages: { volume: 0.6, coupe: false }
+     reglages: { volume: 0.6, coupe: false, qualite: 'auto' }
    }
    localStorage peut être indisponible (navigation privée, stockage bloqué) :
    chaque accès est protégé, et le site marche quand même — sans mémoire.
@@ -14,7 +14,7 @@
 const CLE = 'shinka.v1';
 
 function vierge() {
-  return { version: 1, observations: {}, reglages: { volume: 0.6, coupe: false } };
+  return { version: 1, observations: {}, reglages: { volume: 0.6, coupe: false, qualite: 'auto' } };
 }
 
 function charger() {

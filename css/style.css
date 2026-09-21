@@ -38,6 +38,8 @@ html, body {
   width: 100%;
   height: 100%;
   display: block;
+  touch-action: none;            /* tactile : le doigt est à nous, pas au défilement du navigateur */
+  user-select: none;
 }
 
 /* ---------- Écran d'entrée ---------- */
@@ -441,3 +443,24 @@ body.carnet-ouvert .curseur { opacity: 0; }
 .credits a { color: var(--ecume); text-decoration: none; border-bottom: 1px solid rgba(217, 236, 245, .3); }
 .credits a:hover { border-bottom-color: var(--ecume); }
 .credits p { margin-top: .7rem; font-size: .72rem; color: var(--brume); }
+
+.hud-qualite:not(:empty)::before { content: '·'; margin: 0 .6em; opacity: .5; }
+
+/* ---------- Petits écrans ---------- */
+@media (max-width: 640px) {
+  .entree-titre { font-size: 3.2rem; }
+  .player { bottom: 12px; gap: 8px; padding: .4rem .5rem .4rem .7rem; }
+  .player-titre { display: none; }
+  .player-volume { width: 64px; }
+  .hud { left: 14px; bottom: 62px; font-size: .6rem; }
+  .btn-carnet { right: 14px; bottom: auto; top: 14px; }      /* en haut : la place en bas est prise */
+  .toasts { bottom: 108px; width: calc(100% - 32px); }
+  .toast { padding: .7rem 1.2rem; }
+  .toast-sur { white-space: nowrap; }
+  .toast-nom { font-size: 1.15rem; }
+  .carnet-entete { padding: 16px 18px 12px; }
+  .carnet-grille { padding: 14px 16px; gap: 10px; }
+  .carnet-fiche { padding: 12px 18px 32px; }
+  .fiche-nom { font-size: 1.6rem; }
+  .credits { bottom: 60px; }
+}

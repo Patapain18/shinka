@@ -10,6 +10,7 @@
    Étape 6 : le carnet (panneau, grille, fiches).
    Étape 7 : l'audio (ambiance générée, sons, musique CC0).
    Étape 9 : les événements rares (banc de sardines, géant, eau trouble).
+   Étape 10 : post-processing (rendu.js), qualité adaptative (qualite.js), tactile.
    ============================================ */
 
 import * as THREE from 'three';
@@ -25,6 +26,9 @@ import { nombreObservees } from './collection.js';
 import { creerCarnet } from './carnet.js';
 import { creerAudio } from './audio.js';
 import { creerEvenements } from './evenements.js';
+import { creerRendu } from './rendu.js';
+import { creerQualite } from './qualite.js';
+import { reglages, sauverReglages } from './collection.js';
 
 /* ---------- Le renderer, avec filet de sécurité ---------- */
 // Si WebGL est indisponible, on le dit au visiteur au lieu de lui laisser un écran noir.
@@ -45,6 +49,18 @@ try {
 
 /* ---------- L'eau : sol, rayons, particules ---------- */
 const eau = creerEau(scene, camera);
+
+/* ---------- Post-processing (bloom, vitre) et qualité ---------- */
+const rendu = creerRendu(renderer, scene, camera);
+function redimensionnerTout() {
+  redimensionner(renderer);
+  rendu.redimensionner();
+}
+const qualite = creerQualite({
+  rendu, renderer, eau, redimensionner: redimensionnerTout,
+  reglages: reglages(), sauverReglages,
+  hud: document.getElementById('hud-qualite'),
+});
 
 /* ---------- L'heure réelle → la lumière ---------- */
 const horloge = creerHorloge({ scene, lumieres, eau, renderer });
@@ -182,7 +198,7 @@ function demo(temps) {
 }
 
 /* ---------- Poignée pour les outils de test (outils/*.mjs) ---------- */
-window.__shinka = { camera, get spawner() { return spawner; }, observation, horloge, carnet, audio, evenements };
+window.__shinka = { camera, get spawner() { return spawner; }, observation, horloge, carnet, audio, evenements, qualite, rendu };
 
 /* ---------- Boucle ---------- */
 const chrono = new THREE.Clock();   // le chronomètre de la boucle (l'horloge du jour, c'est `horloge`)
@@ -202,10 +218,11 @@ function boucle() {
   evenements.maj(dt);
   observation.maj(dt);
   demo(temps);
-  renderer.render(scene, camera);
+  qualite.maj(dt);
+  rendu.rendre(dt, temps, souris);
 
   requestAnimationFrame(boucle);   // « rappelle-moi à la prochaine image »
 }
 
-window.addEventListener('resize', () => redimensionner(renderer));
+window.addEventListener('resize', redimensionnerTout);
 boucle();
