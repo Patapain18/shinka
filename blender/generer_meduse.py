@@ -22,6 +22,7 @@ import numpy as np
 from mathutils import Vector
 from commun import *
 from peau import *
+from mouvement import Mouvement, impulsion
 
 nettoyer_scene()
 bm = nouveau_bmesh(zones=('cloche', 'bras', 'tentacules'))
@@ -132,9 +133,15 @@ texturer(meduse, 'Peau_Meduse', resolution=1024, resolution_relief=512, resoluti
          hauteur=lambda t: 0.0006 * fbm(t.p * 40, 2, graine=3) * t.zone('cloche') - 0.0012 * canaux(t))
 
 # ---------------------------------------------------------------- 5) squelette et pulsation
+# Deux os pour la cloche : « cloche » (le sommet, qui se contracte peu) et « marge »
+# (le bord, qui se resserre beaucoup, un peu APRÈS : la contraction court du sommet
+# vers le bord). Pulsation asymétrique : contraction brève, relâchement long. Les bras
+# et la frange traînent derrière ; la méduse s'élève à chaque contraction et oscille
+# lentement. 1,6 s par pulsation, quatre par clip.
 OS = [
     ('racine', (0.0, 0.0, 0.10), (0.0, 0.0, 0.16), None),
     ('cloche', (0.0, 0.0, -0.01), (0.0, 0.0, 0.09), 'racine'),
+    ('marge',  (0.0, 0.0, -0.01), (0.0, 0.0, 0.03), 'cloche'),
 ]
 for k in range(4):
     a = math.radians(45 + 90 * k)
@@ -144,21 +151,35 @@ for k in range(4):
 bras = [nom for nom, _, _, _ in OS if nom.startswith('bras')]
 armature = squelette('Armature_Meduse', OS, sans_heritage_echelle=bras)
 peser_par_parties(meduse, armature, OS, registre)
+# la marge : les sommets de la cloche loin de l'axe glissent de « cloche » vers « marge »
+g_cloche, g_marge = meduse.vertex_groups['cloche'], meduse.vertex_groups['marge']
+for v in meduse.data.vertices:
+    r = math.hypot(v.co.x, v.co.y)
+    if v.co.z > -0.02 and r < 0.19:
+        u = min(1.0, max(0.0, (r - 0.08) / 0.09))
+        w = u * u * (3 - 2 * u)
+        g_marge.add([v.index], w, 'REPLACE')
+        g_cloche.add([v.index], 1 - w, 'REPLACE')
 
-def pulsation(t):
-    """Contraction brève (pic) puis long relâchement : 2·((1 + cos t)/2)^3 − 1, dans [-1, 1]."""
-    return 2 * ((1 + math.cos(t)) / 2) ** 3 - 1
-
+PERIODE = 1.6
 R, S, L = 'rotation_euler', 'scale', 'location'
-pistes = {
-    # contraction : la cloche se resserre (X, Y) et se relève (Z) — base 0,94/1,05, amplitude ±0,06/0,05
-    'cloche': [(S, 0, -0.06, 0.0, 0.94, pulsation), (S, 1, -0.06, 0.0, 0.94, pulsation), (S, 2, 0.05, 0.0, 1.05, pulsation)],
-    'racine': [(L, 2, 0.025, -0.5, 0.0, pulsation)],
-}
+pulse = impulsion(3.0)
+m = Mouvement(armature, PERIODE, cycles=4)
+m.modulation(0.15, graine=5)
+# contraction : le sommet se resserre un peu, le bord beaucoup et un peu après ; la cloche s'allonge
+for axe in (0, 1):
+    m.secondaire('cloche', S, axe, -0.06, phase=0.0, base=1.0, forme=pulse)
+    m.secondaire('marge', S, axe, -0.17, phase=-0.35, base=1.0, forme=pulse)
+m.secondaire('cloche', S, 2, 0.09, phase=0.0, base=1.0, forme=pulse)
+m.secondaire('racine', L, 2, 0.02, phase=-0.5, forme=pulse)                     # elle s'élève à chaque contraction
+m.secondaire('racine', R, 0, 0.05, cycles_par_clip=1, phase=0.0)                # et oscille lentement
+m.secondaire('racine', R, 1, 0.04, cycles_par_clip=1, phase=1.3)
 for k in range(4):
-    pistes[f'bras{k}_1'] = [(R, 0, 0.10, -1.0, 0.0, pulsation), (R, 2, 0.06, -0.6, 0.0)]
-    pistes[f'bras{k}_2'] = [(R, 0, 0.16, -1.8, 0.0, pulsation), (R, 2, 0.08, -1.3, 0.0)]
-animer_os(armature, pistes, images=72)          # 3 s par pulsation
+    m.secondaire(f'bras{k}_1', R, 0, 0.10, phase=-1.0, forme=pulse)              # les bras traînent…
+    m.secondaire(f'bras{k}_1', R, 2, 0.05, phase=-0.6)
+    m.secondaire(f'bras{k}_2', R, 0, 0.16, phase=-1.8, forme=pulse)              # …et le bout encore plus
+    m.secondaire(f'bras{k}_2', R, 2, 0.07, phase=-1.3)
+m.cuire('swim')
 
 chemin = exporter_glb('meduse.glb')
 inspecter_glb(chemin)

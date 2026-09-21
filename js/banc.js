@@ -37,10 +37,13 @@ export class Banc {
     const geometrie = source.geometry.clone();
     const materiau = source.material.clone();
 
-    // Une phase de nage par individu, lue par le vertex shader
+    // Une phase ET une fréquence de nage par individu, lues par le vertex shader :
+    // deux sardines ne battent jamais exactement au même rythme
     const phases = new Float32Array(nombre);
-    for (let i = 0; i < nombre; i++) phases[i] = Math.random() * Math.PI * 2;
+    const frequences = new Float32Array(nombre);
+    for (let i = 0; i < nombre; i++) { phases[i] = Math.random() * Math.PI * 2; frequences[i] = THREE.MathUtils.randFloat(0.85, 1.15); }
     geometrie.setAttribute('aPhase', new THREE.InstancedBufferAttribute(phases, 1));
+    geometrie.setAttribute('aFreq', new THREE.InstancedBufferAttribute(frequences, 1));
 
     this.uTemps = { value: 0 };
     // onBeforeCompile : on greffe notre ondulation dans le shader standard de Three
@@ -48,11 +51,15 @@ export class Banc {
     materiau.onBeforeCompile = (shader) => {
       shader.uniforms.uTemps = this.uTemps;
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nattribute float aPhase;\nuniform float uTemps;')
+        .replace('#include <common>', '#include <common>\nattribute float aPhase;\nattribute float aFreq;\nuniform float uTemps;')
         .replace('#include <begin_vertex>', `#include <begin_vertex>
-          // ondulation latérale, plus ample vers la queue (le museau est en +Z)
-          float versQueue = smoothstep(0.03, -0.08, position.z);
-          transformed.x += sin(uTemps * 14.0 + aPhase + position.z * 40.0) * 0.006 * (0.25 + versQueue);`);
+          // La même onde de nage que les gros animaux (mouvement.py), mais dans le vertex shader :
+          // q = position le long du corps (0 museau en +Z → 1 bout de la queue), enveloppe
+          // d'amplitude carangiforme (petite à la tête, grande à la queue), onde qui court vers
+          // l'arrière (− q), 2,5 Hz modulés par la fréquence propre de l'individu.
+          float q = clamp((0.09 - position.z) / 0.20, 0.0, 1.0);
+          float amp = 0.0030 + 0.012 * q * q;
+          transformed.x += amp * sin(uTemps * 15.7 * aFreq + aPhase - q * 7.9);`);
     };
     materiau.customProgramCacheKey = () => 'banc';   // ce shader modifié a droit à son propre programme
 

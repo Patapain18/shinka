@@ -589,7 +589,7 @@ def marquer(bm, sommets, nom_os, registre, fondu=None):
         v[couche] = etiquette
 
 
-def peser_par_parties(obj, arm, os_defs, registre, colonne=None, recouvrement=1.5):
+def peser_par_parties(obj, arm, os_defs, registre, colonne=None, fondu_chaine=0.6):
     """Lit l'étiquette « partie » de chaque sommet et lui donne le poids de son os
     (avec fondu vers le parent près de la jonction). Voir marquer().
     colonne = [(nom_os, y_debut, y_fin), …] : les sommets SANS étiquette (le corps)
@@ -601,21 +601,13 @@ def peser_par_parties(obj, arm, os_defs, registre, colonne=None, recouvrement=1.
         raise RuntimeError("aucune étiquette « partie » : appeler marquer() pendant la construction")
     groupes = {nom: obj.vertex_groups.new(name=nom) for nom, _, _, _ in os_defs}
     parents = {nom: parent for nom, _, _, parent in os_defs}
-    infos = [(nom, (y0 + y1) / 2, abs(y1 - y0) / 2) for nom, y0, y1 in (colonne or [])]
     for i, v in enumerate(me.vertices):
         etiquette = attr.data[i].value
         if etiquette == 0:
-            if infos:
-                poids = {}
-                for nom, yc, demi in infos:
-                    w = max(0.0, 1.0 - abs(v.co.y - yc) / (demi * recouvrement))
-                    if w > 0:
-                        poids[nom] = w
-                if not poids:
-                    poids = {min(infos, key=lambda o: abs(v.co.y - o[1]))[0]: 1.0}
-                total = sum(poids.values())
-                for nom, w in poids.items():
-                    groupes[nom].add([i], w / total, 'REPLACE')
+            if colonne:
+                for nom, w in poids_chaine(v.co.y, colonne, fondu_chaine).items():
+                    if w > 1e-4:
+                        groupes[nom].add([i], w, 'REPLACE')
             continue
         nom_os, fondu = registre[etiquette - 1]
         w = 1.0
@@ -660,26 +652,52 @@ def animer_os(arm, pistes, images=48, nom_action='swim', pas=2):
     return action
 
 
-def peser_colonne(obj, arm, os_defs, recouvrement=1.5):
-    """Poids de peau « à la main » : chaque os influence les sommets proches de son
-    centre (fonction en tente), les influences voisines se recouvrent, puis on
-    normalise. Déterministe et sans opérateur, contrairement à Automatic Weights."""
+def poids_chaine(y, colonne, fondu=0.6):
+    """Les poids d'un sommet à la hauteur y le long d'une chaîne d'os posés sur Y :
+    colonne = [(nom, y_debut, y_fin), …]. Le sommet appartient à l'os dont l'intervalle
+    le contient ; près d'une charnière il glisse en douceur (smoothstep) vers le voisin,
+    sur une largeur = fondu × la moitié du plus court des deux os. Au-delà des bouts :
+    l'os extrême. Deux os au plus par sommet : la peau plie net, sans effet caoutchouc."""
+    segments = sorted(((min(y0, y1), max(y0, y1), nom) for nom, y0, y1 in colonne), key=lambda s: s[0])
+    if y <= segments[0][0]:
+        return {segments[0][2]: 1.0}
+    if y >= segments[-1][1]:
+        return {segments[-1][2]: 1.0}
+    for i, (a, b, nom) in enumerate(segments):
+        if a <= y <= b:
+            poids = {nom: 1.0}
+            if i > 0:                                                    # charnière avec le précédent
+                pa, pb, pnom = segments[i - 1]
+                largeur = fondu * 0.5 * min(b - a, pb - pa)
+                d = y - a
+                if d < largeur:
+                    u = d / largeur
+                    w = 0.5 * (1 - u * u * (3 - 2 * u))                   # 0,5 sur la charnière → 0 à `largeur`
+                    poids[pnom] = w
+                    poids[nom] = 1 - w
+            if i < len(segments) - 1:
+                na, nb, nnom = segments[i + 1]
+                largeur = fondu * 0.5 * min(b - a, nb - na)
+                d = b - y
+                if d < largeur:
+                    u = d / largeur
+                    w = 0.5 * (1 - u * u * (3 - 2 * u))
+                    poids[nnom] = poids.get(nnom, 0.0) + w
+                    poids[nom] = poids[nom] - w
+            return poids
+    return {segments[-1][2]: 1.0}
+
+
+def peser_colonne(obj, arm, os_defs, fondu=0.6):
+    """Poids de peau « à la main » pour une colonne d'os posés sur Y : voir poids_chaine().
+    Déterministe et sans opérateur, contrairement à Automatic Weights."""
     me = obj.data
     groupes = {nom: obj.vertex_groups.new(name=nom) for nom, _, _, _ in os_defs}
-    infos = [(nom, (y0 + y1) / 2, abs(y1 - y0) / 2) for nom, y0, y1, _ in os_defs]
+    colonne = [(nom, y0, y1) for nom, y0, y1, _ in os_defs]
     for v in me.vertices:
-        y = v.co.y
-        poids = {}
-        for nom, yc, demi in infos:
-            w = max(0.0, 1.0 - abs(y - yc) / (demi * recouvrement))
-            if w > 0:
-                poids[nom] = w
-        if not poids:                                   # au-delà des extrémités
-            nom = min(infos, key=lambda o: abs(y - o[1]))[0]
-            poids = {nom: 1.0}
-        total = sum(poids.values())
-        for nom, w in poids.items():
-            groupes[nom].add([v.index], w / total, 'REPLACE')
+        for nom, w in poids_chaine(v.co.y, colonne, fondu).items():
+            if w > 1e-4:
+                groupes[nom].add([v.index], w, 'REPLACE')
     mod = obj.modifiers.new('Armature', 'ARMATURE')
     mod.object = arm
     obj.parent = arm
@@ -721,7 +739,7 @@ def exporter_glb(nom_fichier):
     chemin = os.path.join(DOSSIER_MODELES, nom_fichier)
     base = dict(filepath=chemin, export_format='GLB', export_apply=True, export_yup=True,
                 export_animations=True, export_skins=True, export_normals=True,
-                export_texcoords=True, export_materials='EXPORT', export_frame_range=True,
+                export_texcoords=True, export_materials='EXPORT', export_frame_range=False,   # chaque action garde SA durée
                 export_force_sampling=True, export_tangents=True, export_image_format='AUTO',
                 export_jpeg_quality=90)
     variantes = [

@@ -14,12 +14,20 @@ try {
   await chrome.envoyer('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 2 });
   await chrome.naviguer('http://localhost:8792/?direct&heure=13&qualite=basse');
   await dormir(4000);
+  // La cible : l'animal non observé le plus proche PARMI CEUX QUI SONT À L'ÉCRAN (un animal
+  // qui entre par le bord est hors champ), et on garde le même pendant tout le geste (marque __cible).
   const ecran = `(() => {
     const s = window.__shinka; if (!s.spawner) return null;
-    const v = s.spawner.animaux.filter(a => !a.observe);
-    if (!v.length) return null;
-    v.sort((a, b) => b.objet.position.z - a.objet.position.z);
-    const a = v[0]; const p = a.objet.position.clone().project(s.camera);
+    let a = s.spawner.animaux.find((x) => x.__cible && !x.fini);
+    if (!a) {
+      const v = s.spawner.animaux.filter((x) => !x.observe)
+        .map((x) => ({ x, p: x.objet.position.clone().project(s.camera) }))
+        .filter((o) => Math.abs(o.p.x) < 0.8 && Math.abs(o.p.y) < 0.8 && o.p.z < 1);
+      if (!v.length) return null;
+      v.sort((m, n) => n.x.objet.position.z - m.x.objet.position.z);
+      a = v[0].x; a.__cible = true;
+    }
+    const p = a.objet.position.clone().project(s.camera);
     return { id: a.espece.id, x: (p.x + 1) / 2 * innerWidth, y: (1 - p.y) / 2 * innerHeight };
   })()`;
   let cible = await chrome.evaluer(ecran);

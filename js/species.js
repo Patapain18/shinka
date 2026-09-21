@@ -25,6 +25,7 @@ export const ESPECES = [
     heures: ['aube', 'jour', 'crepuscule', 'nuit'],
     taille: 1.8,
     vitesse: 1.3,
+    glisse: { nage: [4, 11], plane: [1.5, 4] },   // alterne battements et glisse (action « glide »)
     profondeur: [-1.2, 2.4],
     distance: [-4, -13],
     ondulation: 0.6,
@@ -63,6 +64,7 @@ export const ESPECES = [
     heures: ['crepuscule', 'nuit'],
     taille: 3.2,
     vitesse: 1.1,
+    glisse: { nage: [5, 12], plane: [1.5, 4] },
     profondeur: [-1.0, 2.6],
     distance: [-6, -14],
     ondulation: 0.8,
@@ -82,6 +84,7 @@ export const ESPECES = [
     heures: ['aube', 'jour', 'crepuscule'],
     taille: 1.2,
     vitesse: 0.45,
+    glisse: { nage: [6, 14], plane: [3, 8] },       // elle plane longuement entre deux séries de coups
     profondeur: [-1.2, 2.2],
     distance: [-3.5, -10],
     ondulation: 0.7,
@@ -101,6 +104,7 @@ export const ESPECES = [
     heures: ['aube', 'jour', 'crepuscule', 'nuit'],
     taille: 0.4,
     vitesse: 0.18,
+    toupie: 0.06,                                  // rad/s : tourne lentement sur elle-même
     profondeur: [0.3, 4.0],
     distance: [-2.5, -7],
     ondulation: 1.2,
@@ -121,6 +125,8 @@ export const ESPECES = [
     heures: ['aube', 'jour', 'crepuscule'],
     taille: 5,
     vitesse: 0.9,
+    glisse: { nage: [8, 16], plane: [4, 9] },
+    roulis: 1.0,                                   // s'incline franchement dans les virages
     profondeur: [-0.5, 3.0],
     distance: [-4, -11],
     ondulation: 0.9,
@@ -140,6 +146,7 @@ export const ESPECES = [
     heures: ['aube', 'jour', 'crepuscule', 'nuit'],
     taille: 10,
     vitesse: 0.6,
+    glisse: { nage: [8, 18], plane: [3, 7] },
     profondeur: [-0.8, 3.2],
     distance: [-8, -18],
     ondulation: 0.6,
@@ -180,6 +187,7 @@ export const ESPECES = [
     evenement: true,
     taille: 14,
     vitesse: 0.8,
+    glisse: { nage: [12, 25], plane: [6, 14] },
     profondeur: [-0.5, 2.5],
     distance: [-18, -22],
     ondulation: 0.4,

@@ -4,6 +4,13 @@
    Un Animal, c'est : une copie du modèle de son espèce, son animation de
    nage, et une trajectoire (courbe) qu'il parcourt à vitesse constante.
    Quand il arrive au bout, il se déclare « fini » et le spawner le retire.
+
+   La vie du mouvement (v2) :
+   - le tempo de l'animation dérive lentement (± 8 %) : jamais deux passages identiques ;
+   - les espèces qui ont une action « glide » alternent nage et glisse (fondus
+     enchaînés) : un requin plane entre deux séries de battements ;
+   - dans un virage, le corps s'incline (roulis) proportionnellement au taux de virage ;
+   - une espèce peut tourner lentement sur elle-même (la méduse : `toupie`).
    ============================================ */
 
 import * as THREE from 'three';
@@ -11,6 +18,9 @@ import { instancier } from './modeles.js';
 import { creerLumiere } from './lumiere.js';
 
 const _cible = new THREE.Vector3();   // vecteur de travail, réutilisé (pas d'allocation à chaque frame)
+const _tangente = new THREE.Vector3();
+const _croix = new THREE.Vector3();
+const tirer = ([a, b]) => THREE.MathUtils.randFloat(a, b);
 
 export class Animal {
   /**
@@ -41,14 +51,30 @@ export class Animal {
     // Chaque individu nage un peu plus vite ou plus lentement que la moyenne…
     this.vitesse = vitesse ?? espece.vitesse * THREE.MathUtils.randFloat(0.85, 1.15);
     // …et son animation suit : un requin pressé bat plus vite de la queue.
-    this.mixer.timeScale = this.vitesse / espece.vitesse;
+    this.tempo = this.vitesse / espece.vitesse;
+    this.mixer.timeScale = this.tempo;
+    this.chrono = 0;
+    this.dephasage = Math.random() * 100;   // chacun dérive à son rythme
 
+    this.actions = {};
     const nage = THREE.AnimationClip.findByName(clips, 'swim');
     if (nage) {
       const action = this.mixer.clipAction(nage);
       action.play();
       action.time = Math.random() * nage.duration;   // pas tous synchronisés
+      this.actions.nage = action;
     }
+    // La glisse : présente si le modèle a une action « glide » ET si le catalogue décrit
+    // le comportement (durées de nage et de glisse) ; sinon l'animal nage sans s'arrêter.
+    const plane = THREE.AnimationClip.findByName(clips, 'glide');
+    if (nage && plane && espece.glisse) {
+      this.actions.plane = this.mixer.clipAction(plane);   // pas encore jouée : elle entrera par un fondu
+      this.etat = 'nage';
+      this.prochainChangement = tirer(espece.glisse.nage) * Math.random();   // le premier changement peut venir vite
+    }
+    this.roulis = 0;
+    this.angleToupie = 0;
+    this.tangentePrecedente = null;
 
     this.trajectoire = trajectoire;
     this.longueur = trajectoire.getLength();          // en mètres
@@ -62,9 +88,33 @@ export class Animal {
     // constante même là où la courbe est plus « serrée ».
     this.u += (this.vitesse * dt) / this.longueur;
     if (this.u >= 1) { this.fini = true; return; }
-    this.placer();
+    this.chrono += dt;
+    this.placer(dt);
+    this.comportement(dt);
+    // Le tempo dérive lentement autour de sa valeur : ± 8 %, période ~ 20 s
+    this.mixer.timeScale = this.tempo * (1 + 0.08 * Math.sin(this.chrono * 0.31 + this.dephasage));
     this.mixer.update(dt);
     this.lumiere.maj(dt);
+  }
+
+  /** Nage ↔ glisse : au bout d'un temps tiré au sort, un fondu enchaîné vers l'autre action.
+      Piège de Three : quand un fondu sortant arrive à zéro, l'action est DÉSACTIVÉE, et un fondu
+      entrant multiplie le poids de base de l'action — il faut donc réactiver la cible et remettre
+      son poids de base à 1 avant chaque fondu, sinon les deux poids finissent à zéro (animal figé). */
+  comportement(dt) {
+    if (!this.actions.plane) return;
+    this.prochainChangement -= dt;
+    if (this.prochainChangement > 0) return;
+    const g = this.espece.glisse;
+    const [de, vers, duree, delai] = this.etat === 'nage'
+      ? [this.actions.nage, this.actions.plane, 0.9, g.plane]
+      : [this.actions.plane, this.actions.nage, 0.7, g.nage];
+    this.etat = this.etat === 'nage' ? 'plane' : 'nage';
+    vers.enabled = true;
+    vers.setEffectiveWeight(1);
+    if (!vers.isRunning()) { vers.time = Math.random() * vers.getClip().duration; vers.play(); }
+    de.crossFadeTo(vers, duree, false);
+    this.prochainChangement = tirer(delai);
   }
 
   /** Une lueur brève sur l'animal : il vient d'être observé. */
@@ -83,14 +133,29 @@ export class Animal {
     this.objet.traverse((o) => { if (o.isSkinnedMesh) o.skeleton.dispose(); });
   }
 
-  placer() {
+  placer(dt = 0) {
     const u = Math.min(this.u, 1);
     this.trajectoire.getPointAt(u, this.objet.position);
     // Regarder dans la direction du mouvement : la tangente de la courbe.
     // lookAt() oriente le +Z de l'objet vers la cible — et le museau est en +Z
     // (c'est pour ça que la convention Blender « tête vers -Y » est importante).
-    const tangente = this.trajectoire.getTangentAt(u);
-    _cible.copy(this.objet.position).add(tangente);
+    this.trajectoire.getTangentAt(u, _tangente);
+    _cible.copy(this.objet.position).add(_tangente);
     this.objet.lookAt(_cible);
+    // Roulis dans les virages : taux de virage (rad/s, > 0 = vers la gauche vu de dessus)
+    // → le corps s'incline vers l'intérieur, en douceur (damp). Puis la toupie (méduse).
+    if (dt > 0 && this.tangentePrecedente) {
+      const angle = this.tangentePrecedente.angleTo(_tangente);
+      const sens = Math.sign(_croix.crossVectors(this.tangentePrecedente, _tangente).y);
+      const taux = sens * angle / dt;
+      const cible = THREE.MathUtils.clamp(-(this.espece.roulis ?? 0.6) * taux, -0.35, 0.35);
+      this.roulis = THREE.MathUtils.damp(this.roulis, cible, 2.5, dt);
+    }
+    this.tangentePrecedente = (this.tangentePrecedente ?? new THREE.Vector3()).copy(_tangente);
+    if (this.roulis) this.objet.rotateZ(this.roulis);          // Z local = l'axe du corps
+    if (this.espece.toupie) {
+      this.angleToupie += this.espece.toupie * dt;
+      this.objet.rotateY(this.angleToupie);                     // Y local = l'axe de la cloche
+    }
   }
 }

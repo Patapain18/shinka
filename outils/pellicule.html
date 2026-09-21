@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Shinka — pellicule d'animation</title>
+  <!-- Outil de contrôle des animations : N copies du modèle côte à côte, chacune figée à un
+       instant du cycle (t = k·durée/N), plus une dernière à t = durée (elle doit être identique
+       à la première : la boucle est propre). Paramètres :
+         ?modele=requin-recif&anim=swim&n=8&vue=dessus|cote|face|trois-quarts
+       Capture : node outils/capture.mjs "http://localhost:8792/outils/pellicule.html?modele=requin-recif&n=8&vue=dessus" p.png 4 1800 500 -->
+  <style>
+    body { margin: 0; background: #0b1a26; color: #d9ecf5; font: 12px/1.4 Inter, system-ui, sans-serif; overflow: hidden; }
+    canvas { display: block; }
+    #infos { position: fixed; top: 10px; left: 12px; padding: 6px 10px; background: rgba(2, 7, 12, .7); border-radius: 6px; white-space: pre; }
+  </style>
+  <script type="importmap">
+  { "imports": { "three": "https://unpkg.com/three@0.170.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/" } }
+  </script>
+</head>
+<body>
+  <div id="infos">chargement…</div>
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { clone } from 'three/addons/utils/SkeletonUtils.js';
+
+    const params = new URLSearchParams(location.search);
+    const modele = params.get('modele') || 'requin-recif';
+    const nomAnim = params.get('anim') || 'swim';
+    const n = parseInt(params.get('n') || '8');
+    const vue = params.get('vue') || 'dessus';
+    const infos = document.getElementById('infos');
+    window.addEventListener('error', e => { infos.textContent += '\nERREUR ' + e.message; });
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    document.body.appendChild(renderer.domElement);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0b1a26);
+    const cle = new THREE.DirectionalLight(0xe4eef8, 3.0); cle.position.set(3, 8, 4);
+    const debouche = new THREE.DirectionalLight(0x8fb4d4, 1.2); debouche.position.set(-4, 2, -3);
+    scene.add(cle, debouche, new THREE.HemisphereLight(0xc8dcec, 0x243240, 1.2));
+
+    new GLTFLoader().load(`../models/${modele}.glb`, (gltf) => {
+      const clip = THREE.AnimationClip.findByName(gltf.animations, nomAnim);
+      if (!clip) { infos.textContent = `pas d'animation « ${nomAnim} » (${gltf.animations.map(a => a.name).join(', ')})`; return; }
+      const boite = new THREE.Box3().setFromObject(gltf.scene);
+      const taille = boite.getSize(new THREE.Vector3());
+      // La rangée s'aligne sur l'axe perpendiculaire à la vue ET à la longueur du modèle (Z = vers le museau) :
+      //   dessus (caméra en +Y) et face (caméra en +Z) : rangée le long de X ; côté (caméra en +X) : rangée le long de Z
+      const VUES = { dessus: { dir: [0, 1, 0], up: [0, 0, 1], axe: 'x', pas: taille.x * 1.3 },
+                     cote:   { dir: [1, 0.08, 0], up: [0, 1, 0], axe: 'z', pas: taille.z * 1.12 },
+                     face:   { dir: [0, 0.08, 1], up: [0, 1, 0], axe: 'x', pas: taille.x * 1.3 },
+                     'trois-quarts': { dir: [0.5, 0.7, 0.9], up: [0, 1, 0], axe: 'x', pas: Math.max(taille.x, taille.z) * 1.1 } };
+      const V = VUES[vue] || VUES.dessus;
+      const copies = [];
+      for (let k = 0; k <= n; k++) {            // n + 1 copies : la dernière à t = durée = la première
+        const c = clone(gltf.scene);
+        const mixer = new THREE.AnimationMixer(c);
+        mixer.clipAction(clip).play();
+        mixer.setTime(k === n ? clip.duration - 1e-4 : clip.duration * k / n);
+        c.position[V.axe] = (k - n / 2) * V.pas;
+        scene.add(c);
+        copies.push(c);
+      }
+      // caméra : cadre toute la rangée
+      const largeur = V.pas * (n + 1.2);
+      const camera = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.05, 500);
+      camera.up.fromArray(V.up);
+      const dist = (largeur / 2) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / camera.aspect;
+      const dir = new THREE.Vector3().fromArray(V.dir).normalize();
+      camera.position.copy(dir.multiplyScalar(Math.max(dist, taille.length() * 2)));
+      camera.lookAt(0, 0, 0);
+      renderer.render(scene, camera);
+      infos.textContent = `${modele} · ${nomAnim} (${clip.duration.toFixed(2)} s) · ${n} poses + la dernière = t final`;
+      window.__pellicule = { copies, clip };
+    });
+  </script>
+</body>
+</html>

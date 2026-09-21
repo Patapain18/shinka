@@ -18,6 +18,7 @@ import numpy as np
 from mathutils import Vector
 from commun import *
 from peau import *
+from mouvement import Mouvement, glisse
 
 nettoyer_scene()
 bm = nouveau_bmesh(zones=('corps', 'nageoires', 'pectorales', 'caudale', 'yeux'))
@@ -134,29 +135,41 @@ texturer(baleine, 'Peau_Baleine', resolution=2048, resolution_relief=1024, resol
          couleur=couleur, hauteur=hauteur, rugosite=rugosite)
 
 # ---------------------------------------------------------------- 5) squelette et nage (tangage : un mammifère)
+# La même onde de nage que les requins, mais dans le plan vertical (mode « tangage ») :
+# la queue bat de haut en bas, la caudale souple suit avec retard. Amplitude modulée
+# fort sur le clip (0,30) : deux coups puissants puis deux faibles — « coup, puis
+# glisse » —, plus une vraie action de glisse. Les pectorales vivent leur vie, lentement.
+CHAINE = [('racine', -2.0, 0.8), ('tete', -2.0, -7.0), ('corps_1', 0.8, 3.0), ('queue_1', 3.0, 4.6),
+          ('queue_2', 4.6, 5.5), ('caudale', 5.5, 6.7)]
 OS = [
-    ('racine',  (0, -2.0, 0), (0, 0.8, 0), None),
-    ('tete',    (0, -2.0, 0), (0, -7.0, -0.3), 'racine'),
-    ('corps_1', (0, 0.8, 0), (0, 3.0, 0.15), 'racine'),
-    ('queue_1', (0, 3.0, 0.15), (0, 4.6, 0.2), 'corps_1'),
-    ('queue_2', (0, 4.6, 0.2), (0, 5.5, 0.25), 'queue_1'),
-    ('queue_3', (0, 5.5, 0.25), (0, 6.6, 0.3), 'queue_2'),
+    ('racine',  (0, -2.0, 0.1), (0, 0.8, 0.1), None),
+    ('tete',    (0, -2.0, 0.1), (0, -7.0, 0.1), 'racine'),
+    ('corps_1', (0, 0.8, 0.1), (0, 3.0, 0.1), 'racine'),
+    ('queue_1', (0, 3.0, 0.1), (0, 4.6, 0.1), 'corps_1'),
+    ('queue_2', (0, 4.6, 0.1), (0, 5.5, 0.1), 'queue_1'),
+    ('caudale', (0, 5.5, 0.1), (0, 6.7, 0.1), 'queue_2'),
     ('pec_g',   (1.0, -3.2, -0.7), (4.7, -2.6, -2.0), 'racine'),
     ('pec_d',   (-1.0, -3.2, -0.7), (-4.7, -2.6, -2.0), 'racine'),
 ]
 armature = squelette('Armature_Baleine', OS)
-peser_par_parties(baleine, armature, OS, registre,
-                  colonne=[('racine', -2.0, 0.8), ('tete', -2.0, -7.0), ('corps_1', 0.8, 3.0), ('queue_1', 3.0, 4.6), ('queue_2', 4.6, 5.5), ('queue_3', 5.5, 6.6)])
+peser_par_parties(baleine, armature, OS, registre, colonne=CHAINE)
+
+PERIODE = 6.0
 R = 'rotation_euler'
-animer_os(armature, {                              # axe X = tangage : la queue monte et descend
-    'racine':  [(R, 0, 0.015, 0.0, 0.0)],
-    'tete':    [(R, 0, 0.012, 0.5, 0.0)],
-    'corps_1': [(R, 0, 0.040, -0.8, 0.0)],
-    'queue_1': [(R, 0, 0.090, -1.6, 0.0)],
-    'queue_2': [(R, 0, 0.140, -2.4, 0.0)],
-    'queue_3': [(R, 0, 0.180, -3.2, 0.0)],
-    'pec_g':   [(R, 0, 0.06, 0.6, 0.0), (R, 1, 0.05, 1.2, 0.0)],
-    'pec_d':   [(R, 0, 0.06, 0.6, 0.0), (R, 1, -0.05, 1.2, 0.0)],
-}, images=192)                                     # 8 s par battement
+
+def nage(m):
+    m.modulation(0.30, harmoniques=((1, 0.0),), graine=7)
+    m.onde(CHAINE, longueur=13.7, s_museau=-7.0, A_tete=0.008, A_queue=0.07, exposant=2.2,
+           longueur_onde=1.3, mode='tangage', retard_caudal=0.5, s_caudal=0.88)
+    for nom, s in (('pec_g', 1), ('pec_d', -1)):
+        m.secondaire(nom, R, 0, 0.06, cycles_par_clip=2, phase=0.6 * s)         # les pectorales : lentes, indépendantes
+        m.secondaire(nom, R, 1, 0.05 * s, cycles_par_clip=2, phase=1.5)
+        m.secondaire(nom, R, 0, 0.025, phase=1.0)                                # …et un peu avec chaque coup
+    m.secondaire('racine', R, 1, 0.012, cycles_par_clip=1, phase=0.4)            # un lent roulis
+
+m = Mouvement(armature, PERIODE, cycles=4)                                      # 24 s par clip
+nage(m)
+m.cuire('swim')
+glisse(armature, nage, PERIODE, facteur_amplitude=0.20, facteur_periode=1.5, cycles=1)
 chemin = exporter_glb('baleine.glb')
 inspecter_glb(chemin)

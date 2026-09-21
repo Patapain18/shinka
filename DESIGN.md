@@ -284,16 +284,45 @@ Trois fichiers partagés, un script par espèce :
   le catalogue — pas de panique.)
 - **Origine** du mesh au centre du corps (`Object → Set Origin → Origin to Geometry`).
 
-### 7.3 Rig et animation
-- **Une armature** par animal, un os racine à l'origine, les autres en chaîne (colonne : 6-8 os
-  pour un requin, ça suffit). Parentage avec **Automatic Weights**, puis retouche des poids si besoin.
-- Actions à créer (noms **exacts, en minuscules**) :
-  - `swim` — **obligatoire**. Cycle de nage bouclé : la dernière frame = la première. 24 ou 30 fps, 1 à 3 s.
-  - `swim_fast` — optionnel (fuite, accélération).
-  - `idle` — optionnel (sur place : tortue qui flotte, mérou posé).
-- **Piège n°1** : l'exporteur n'exporte que les actions qu'il « voit ». Dans le *Dope Sheet → Action Editor*,
-  pour chaque action : bouton **Push Down** (ou *Stash*) pour l'envoyer dans le NLA. Sinon elle disparaît à l'export.
-- Les contraintes (IK, etc.) sont *cuites* (baked) à l'export : tu peux les utiliser.
+### 7.3 Rig et animation (v2, 2026-09-21)
+
+- **Une armature** par animal, construite par le script (`squelette()` : os 3D, `squelette_colonne()` : os sur Y).
+  Colonne de 7 os pour un requin (tête, racine, deux de tronc, deux de queue, caudale) + un os par pectorale ;
+  poids par `peser_par_parties()` (parties étiquetées) avec `colonne=` pour le corps : `poids_chaine()` donne
+  chaque sommet à l'os qui contient son y, avec un fondu smoothstep autour des charnières — deux os au plus par
+  sommet, la peau plie net (plus d'effet caoutchouc).
+- **Le mouvement est de la biomécanique** (`blender/mouvement.py`), plus des chiffres par os :
+  - `Mouvement(arm, periode, cycles)` : un clip de `cycles` battements (la période est arrondie au 1/24 s
+    pour que le clip fasse un nombre entier d'images — sinon la boucle saute) ;
+  - `.onde(chaine, longueur, s_museau, A_tete, A_queue, exposant, longueur_onde, mode, retard_caudal)` : la
+    ligne médiane ondule, h(s,t) = L·A(s)·sin(2π(s/λ − t/T) − δ(s)), A(s) = enveloppe (fractions de la longueur,
+    exposant 2 = carangiforme : le tiers avant bouge à peine), λ en longueurs de corps, δ = retard de la caudale
+    souple ; chaque os prend la rotation relative qui fait suivre la médiane à la chaîne (lacet Z pour un
+    poisson, tangage X pour un cétacé), la racine glisse pour rester sur la médiane ;
+  - `.modulation(profondeur)` : l'amplitude varie lentement sur le clip — deux battements ne sont jamais
+    identiques (0,12 pour un requin, 0,30 pour la baleine : coups forts puis faibles) ;
+  - `.secondaire(os, canal, axe, amplitude, cycles_par_clip, phase, base, forme, enveloppe)` : nageoires,
+    tête, roulis, bobs ; formes `sinus`, `asymetrique(k)` (coup rapide, retour lent), `impulsion(p)` (pic bref,
+    long plateau : la méduse) ; `rafale(centre, largeur)` = enveloppe « bouffée » (les coups de queue du chirurgien) ;
+  - `.cuire('swim')` écrit les clés image par image, VÉRIFIE que chaque piste boucle, range l'action dans une
+    piste NLA ; `glisse(arm, recette, periode)` fabrique l'action **`glide`** (même recette, ralentie, amplitudes × 0,2).
+    L'export (`export_frame_range=False`) garde la durée de chaque action.
+- Par espèce : requins = onde carangiforme + roulis + pectorales qui vrillent ; marteau = tête qui balaie ;
+  requin-baleine = tout le corps (exposant 1,7), 4,5 s ; chirurgien = labriforme (pectorales qui rament en
+  drapeau, rafale de queue) ; tortue = vol des nageoires avant à deux os (coup rapide, remontée lente en drapeau,
+  pale qui plie), arrière en gouvernail ; méduse = deux os de cloche (sommet, marge en retard), pulsation
+  asymétrique ; manta = onde d'emplanture au bout + vrillage + enroulement du bout ; baleine = onde de tangage
+  à modulation forte, pectorales indépendantes ; sardines = la même onde dans le vertex shader (`banc.js`,
+  fréquence propre par individu).
+- **Côté site** (`animal.js`) : le tempo dérive (± 8 %) ; les espèces avec `glisse: {nage, plane}` dans le catalogue
+  alternent `swim` et `glide` par fondus enchaînés (piège de Three : réactiver l'action cible et remettre son
+  poids de base à 1 avant chaque fondu, sinon tout finit à zéro) ; roulis dans les virages (taux de virage →
+  inclinaison, `roulis` par espèce) ; `toupie` = rotation lente sur soi (méduse).
+- **Contrôle** : `outils/pellicule.html?modele=<id>&anim=swim|glide&n=8&vue=dessus|cote|face|trois-quarts`
+  montre un cycle entier en une image (n poses + la dernière = t final, identique à la première si la boucle
+  est propre) ; `node outils/test-animation.mjs` vérifie les fondus, la dérive du tempo et le roulis dans le site.
+- Piège n°1 (toujours vrai) : l'exporteur n'exporte que les actions qu'il « voit » : celles rangées dans des
+  pistes NLA (`cuire()` s'en charge) ou l'action active.
 
 ### 7.4 Matériaux
 - Uniquement **Principled BSDF**. Textures via nœuds *Image Texture* (base color, roughness, normal via *Normal Map*).

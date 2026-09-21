@@ -19,6 +19,7 @@ import numpy as np
 from mathutils import Vector
 from commun import *
 from peau import *
+from mouvement import Mouvement, glisse
 
 nettoyer_scene()
 bm = nouveau_bmesh(zones=('corps', 'ailes', 'lobes', 'yeux'))
@@ -132,6 +133,11 @@ texturer(manta, 'Peau_Manta', resolution=2048, resolution_relief=1024, resolutio
          couleur=couleur, hauteur=hauteur, rugosite=rugosite)
 
 # ---------------------------------------------------------------- 5) squelette et vol
+# Les ailes battent comme celles d'un oiseau lent : une onde court de l'emplanture au
+# bout (chaque os suit le précédent avec retard), le bout s'enroule en fin de course
+# (harmonique 2) et l'aile VRILLE — le bord de fuite se relève sur la remontée — pour
+# garder de la portance. Le disque tangue et monte avec chaque battement ; les lobes
+# céphaliques ondulent ; la queue suit. 5 s par battement, deux par clip, et une glisse.
 OS = [
     ('racine',   (0.0, 0.5, 0.0),     (0.0, -0.5, 0.0),   None),
     ('aile_g_1', (0.35, -0.20, 0.0),  (1.0, -0.35, 0.0),  'racine'),
@@ -147,15 +153,33 @@ OS = [
 ]
 armature = squelette('Armature_Manta', OS)
 peser_par_parties(manta, armature, OS, registre)
+
+PERIODE = 5.0
 R, L = 'rotation_euler', 'location'
-animer_os(armature, {
-    # les ailes battent (rotation X locale = autour de l'axe du corps) ; le bout suit avec retard : une onde
-    'aile_g_1': [(R, 0, 0.26, 0.0, 0.0)],  'aile_g_2': [(R, 0, 0.30, -0.6, 0.0)],  'aile_g_3': [(R, 0, 0.34, -1.2, 0.0)],
-    'aile_d_1': [(R, 0, 0.26, 0.0, 0.0)],  'aile_d_2': [(R, 0, 0.30, -0.6, 0.0)],  'aile_d_3': [(R, 0, 0.34, -1.2, 0.0)],
-    'racine':   [(L, 2, 0.08, 1.2, 0.0), (R, 0, 0.03, 0.9, 0.0)],   # le corps monte et descend, tangue un peu
-    'lobe_g':   [(R, 1, 0.12, 0.5, 0.0)],  'lobe_d':   [(R, 1, -0.12, 0.5, 0.0)],
-    'queue_1':  [(R, 0, 0.08, -1.0, 0.0)], 'queue_2':  [(R, 0, 0.14, -1.8, 0.0)],
-}, images=120)                                       # 5 s par battement
+enroule = lambda t: math.sin(t) + 0.25 * math.sin(2 * t)         # le bout s'enroule en fin de course
+
+def vol(m):
+    m.modulation(0.12, graine=6)
+    for cote, s in (('g', 1), ('d', -1)):
+        # battement (X local = autour de l'axe du corps) : une onde de l'emplanture au bout
+        m.secondaire(f'aile_{cote}_1', R, 0, 0.24, phase=0.0)
+        m.secondaire(f'aile_{cote}_2', R, 0, 0.30, phase=-0.55)
+        m.secondaire(f'aile_{cote}_3', R, 0, 0.36, phase=-1.10, forme=enroule)
+        # vrillage (Y local = autour de l'axe de l'aile) : en quadrature, plus fort vers le bout
+        m.secondaire(f'aile_{cote}_2', R, 1, 0.08 * s, phase=1.2)
+        m.secondaire(f'aile_{cote}_3', R, 1, 0.16 * s, phase=1.0)
+        m.secondaire(f'lobe_{cote}', R, 1, 0.10 * s, phase=0.5)
+        m.secondaire(f'lobe_{cote}', R, 0, 0.06, cycles_par_clip=1, phase=0.3 * s)
+    m.secondaire('racine', L, 2, 0.08, phase=1.2)                     # le disque monte et descend…
+    m.secondaire('racine', R, 0, 0.03, phase=0.9)                     # …et tangue
+    m.secondaire('queue_1', R, 0, 0.08, phase=-1.0)
+    m.secondaire('queue_2', R, 0, 0.14, phase=-1.8)
+    m.secondaire('queue_1', R, 2, 0.04, cycles_par_clip=1, phase=0.7)
+
+m = Mouvement(armature, PERIODE, cycles=2)
+vol(m)
+m.cuire('swim')
+glisse(armature, vol, PERIODE, facteur_amplitude=0.25, facteur_periode=1.5, cycles=1)
 
 chemin = exporter_glb('manta.glb')
 inspecter_glb(chemin)

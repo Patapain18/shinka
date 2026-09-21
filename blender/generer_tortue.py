@@ -22,6 +22,7 @@ from mathutils import Vector
 from commun import *
 from commun import _orienter
 from peau import *
+from mouvement import Mouvement, glisse, asymetrique
 
 nettoyer_scene()
 bm = nouveau_bmesh(zones=('carapace', 'plastron', 'peau', 'yeux'))
@@ -109,7 +110,9 @@ for s, nom in ((+1, 'nag_av_g'), (-1, 'nag_av_d')):
         (0.00, -0.14, 0.12, 0.030), (0.08, -0.15, 0.13, 0.028), (0.20, -0.15, 0.12, 0.024),
         (0.32, -0.13, 0.10, 0.018), (0.44, -0.10, 0.06, 0.012), (0.54, -0.06, 0.02, 0.006),
         (0.60, -0.03, 0.00, 0.0)], segments=14, zone='peau')
-    marquer(bm, v, nom, registre, ((s * 0.30, -0.22, -0.03), 0.12))
+    # deux os par nageoire avant : le bras (jusqu'à x = 0,62) et la pale, qui plie avec retard
+    marquer(bm, [q for q in v if abs(q.co.x) < 0.62], nom, registre, ((s * 0.30, -0.22, -0.03), 0.12))
+    marquer(bm, [q for q in v if abs(q.co.x) >= 0.62], nom + '2', registre, ((s * 0.62, -0.33, -0.08), 0.14))
 for s, nom in ((+1, 'nag_ar_g'), (-1, 'nag_ar_d')):
     v = nageoire_loft(bm, (s * 0.22, 0.32, -0.04), (s * 0.8, 0.55, -0.2), (0, 1, 0), [
         (0.00, -0.10, 0.10, 0.025), (0.08, -0.10, 0.12, 0.022), (0.18, -0.08, 0.13, 0.016),
@@ -213,30 +216,53 @@ texturer(tortue, 'Peau_Tortue', resolution=2048, resolution_relief=1024, resolut
          couleur=couleur, hauteur=hauteur, rugosite=rugosite)
 
 # ---------------------------------------------------------------- 5) squelette et nage
+# Le « vol » sous-marin : les nageoires avant sont des ailes. Coup vers le bas rapide
+# et puissant, remontée lente avec la pale mise en drapeau (vrillage), et la pale
+# (second os) qui plie avec retard sur le bras. Les arrière servent de gouvernail
+# (un lent mouvement par clip). Le corps se soulève à chaque coup, la tête hoche.
+# 3,5 s par coup, deux coups par clip ; et une glisse (elle plane beaucoup).
 OS = [
-    ('racine',   (0.0, 0.05, 0.0),      (0.0, 0.30, 0.0),      None),
-    ('cou',      (0.0, -0.40, 0.0),     (0.0, -0.56, 0.0),     'racine'),
-    ('tete',     (0.0, -0.56, 0.0),     (0.0, -0.72, -0.01),   'cou'),
-    ('nag_av_g', (0.30, -0.22, -0.03),  (0.86, -0.42, -0.12),  'racine'),
-    ('nag_av_d', (-0.30, -0.22, -0.03), (-0.86, -0.42, -0.12), 'racine'),
-    ('nag_ar_g', (0.22, 0.32, -0.04),   (0.50, 0.51, -0.11),   'racine'),
-    ('nag_ar_d', (-0.22, 0.32, -0.04),  (-0.50, 0.51, -0.11),  'racine'),
-    ('queue',    (0.0, 0.44, -0.055),   (0.0, 0.60, -0.065),   'racine'),
+    ('racine',    (0.0, 0.05, 0.0),      (0.0, 0.30, 0.0),      None),
+    ('cou',       (0.0, -0.40, 0.0),     (0.0, -0.56, 0.0),     'racine'),
+    ('tete',      (0.0, -0.56, 0.0),     (0.0, -0.72, -0.01),   'cou'),
+    ('nag_av_g',  (0.30, -0.22, -0.03),  (0.62, -0.33, -0.08),  'racine'),
+    ('nag_av_g2', (0.62, -0.33, -0.08),  (0.86, -0.42, -0.12),  'nag_av_g'),
+    ('nag_av_d',  (-0.30, -0.22, -0.03), (-0.62, -0.33, -0.08), 'racine'),
+    ('nag_av_d2', (-0.62, -0.33, -0.08), (-0.86, -0.42, -0.12), 'nag_av_d'),
+    ('nag_ar_g',  (0.22, 0.32, -0.04),   (0.50, 0.51, -0.11),   'racine'),
+    ('nag_ar_d',  (-0.22, 0.32, -0.04),  (-0.50, 0.51, -0.11),  'racine'),
+    ('queue',     (0.0, 0.44, -0.055),   (0.0, 0.60, -0.065),   'racine'),
 ]
 armature = squelette('Armature_Tortue', OS)
 peser_par_parties(tortue, armature, OS, registre)
-R = 'rotation_euler'
-animer_os(armature, {
-    # avant : battement vertical (X) + balayage (Z) en quadrature + vrillage (Y) : le « vol » sous-marin
-    'nag_av_g': [(R, 0, 0.55, 0.0, 0.0), (R, 2, 0.18, 1.57, 0.0), (R, 1, 0.30, 0.8, 0.0)],
-    'nag_av_d': [(R, 0, 0.55, 0.0, 0.0), (R, 2, -0.18, 1.57, 0.0), (R, 1, -0.30, 0.8, 0.0)],
-    'nag_ar_g': [(R, 0, 0.18, 3.14, 0.0), (R, 2, 0.08, 4.71, 0.0)],
-    'nag_ar_d': [(R, 0, 0.18, 3.14, 0.0), (R, 2, -0.08, 4.71, 0.0)],
-    'cou':      [(R, 0, 0.05, 0.4, 0.0)],
-    'tete':     [(R, 0, 0.05, 0.9, 0.0), (R, 2, 0.04, 2.0, 0.0)],
-    'racine':   [(R, 0, 0.025, 0.0, 0.0), ('location', 2, 0.02, 0.3, 0.0)],
-    'queue':    [(R, 2, 0.12, 1.0, 0.0)],
-}, images=96)                                   # 4 s par cycle : majestueux
+
+PERIODE = 3.5
+R, L = 'rotation_euler', 'location'
+
+def nage(m):
+    m.modulation(0.10, graine=4)
+    for s, nom in ((1, 'nag_av_g'), (-1, 'nag_av_d')):
+        # le bras : battement (X local) asymétrique, balayage (Z) en quadrature, vrillage (Y) sur la remontée
+        m.secondaire(nom, R, 0, 0.55, phase=0.0, forme=asymetrique(0.32))
+        m.secondaire(nom, R, 2, 0.18 * s, phase=1.57)
+        m.secondaire(nom, R, 1, 0.30 * s, phase=2.2)
+        # la pale : plie avec retard et vrille davantage
+        m.secondaire(nom + '2', R, 0, 0.30, phase=-0.6, forme=asymetrique(0.32))
+        m.secondaire(nom + '2', R, 1, 0.22 * s, phase=1.6)
+    for s, nom in ((1, 'nag_ar_g'), (-1, 'nag_ar_d')):
+        m.secondaire(nom, R, 0, 0.14, cycles_par_clip=1, phase=3.14)          # gouvernail : lent
+        m.secondaire(nom, R, 2, 0.08 * s, cycles_par_clip=1, phase=4.71)
+    m.secondaire('cou', R, 0, 0.05, phase=0.4)
+    m.secondaire('tete', R, 0, 0.05, phase=0.9)
+    m.secondaire('tete', R, 2, 0.04, cycles_par_clip=1, phase=2.0)          # elle regarde un peu à côté
+    m.secondaire('racine', R, 0, 0.03, phase=0.0)                            # tangage avec le coup
+    m.secondaire('racine', L, 2, 0.025, phase=0.4)                           # se soulève à chaque coup
+    m.secondaire('queue', R, 2, 0.10, phase=1.0)
+
+m = Mouvement(armature, PERIODE, cycles=2)
+nage(m)
+m.cuire('swim')
+glisse(armature, nage, PERIODE, facteur_amplitude=0.15, facteur_periode=2.0, cycles=1)
 
 chemin = exporter_glb('tortue.glb')
 inspecter_glb(chemin)

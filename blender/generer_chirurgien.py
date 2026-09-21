@@ -19,6 +19,7 @@ import numpy as np
 from mathutils import Vector
 from commun import *
 from peau import *
+from mouvement import Mouvement, asymetrique
 
 nettoyer_scene()
 bm = nouveau_bmesh(zones=('corps', 'nageoires', 'pectorales', 'caudale', 'yeux'))
@@ -150,6 +151,10 @@ texturer(poisson, 'Peau_Chirurgien', resolution=1024, resolution_relief=512, res
          couleur=couleur, hauteur=hauteur, rugosite=rugosite)
 
 # ---------------------------------------------------------------- 5) squelette et nage
+# Nage LABRIFORME : ce sont les pectorales qui propulsent — elles rament (balayage
+# avant-arrière, coup rapide et retour lent) en se mettant « en drapeau » au retour
+# (vrillage en quadrature). Le corps ne fait qu'une petite onde et se balance ; la
+# queue ne sert que par bouffées : une rafale de coups par clip, puis rien.
 OS = [
     ('racine',  (0, -0.03, 0), (0, 0.03, 0), None),
     ('tete',    (0, -0.03, 0), (0, -0.135, 0), 'racine'),
@@ -158,19 +163,26 @@ OS = [
     ('pec_g',   (0.022, -0.045, -0.005), (0.056, -0.035, -0.010), 'racine'),
     ('pec_d',   (-0.022, -0.045, -0.005), (-0.056, -0.035, -0.010), 'racine'),
 ]
+CHAINE = [('racine', -0.03, 0.03), ('tete', -0.03, -0.135), ('queue_1', 0.03, 0.09), ('queue_2', 0.09, 0.155)]
 armature = squelette('Armature_Chirurgien', OS)
-peser_par_parties(poisson, armature, OS, registre,
-                  colonne=[('racine', -0.03, 0.03), ('tete', -0.03, -0.135), ('queue_1', 0.03, 0.09), ('queue_2', 0.09, 0.155)])
+peser_par_parties(poisson, armature, OS, registre, colonne=CHAINE)
+
+PERIODE = 0.625                                         # un coup de pectorales : 1,6 Hz
 R = 'rotation_euler'
-animer_os(armature, {
-    'racine':  [(R, 2, 0.020, 0.0, 0.0)],
-    'tete':    [(R, 2, 0.015, 0.5, 0.0)],
-    'queue_1': [(R, 2, 0.090, -1.0, 0.0)],
-    'queue_2': [(R, 2, 0.180, -2.0, 0.0)],
-    # les pectorales rament : battement (X local) + balayage (Z local) en quadrature
-    'pec_g':   [(R, 0, 0.35, 0.0, 0.0), (R, 2, 0.20, 1.4, 0.0)],
-    'pec_d':   [(R, 0, 0.35, 0.0, 0.0), (R, 2, -0.20, 1.4, 0.0)],
-}, images=24)                                          # 1 s par cycle : petit poisson vif
+m = Mouvement(armature, PERIODE, cycles=8)              # 5 s par clip
+m.modulation(0.10, graine=3)
+m.onde(CHAINE, longueur=0.29, s_museau=-0.135, A_tete=0.004, A_queue=0.035, exposant=2.5, longueur_onde=1.0)
+for nom, s in (('pec_g', 1), ('pec_d', -1)):
+    m.secondaire(nom, R, 2, 0.55 * s, phase=0.0, forme=asymetrique(0.35))      # balayage : coup rapide, retour lent
+    m.secondaire(nom, R, 1, 0.35 * s, phase=1.57)                              # vrillage « en drapeau » au retour
+    m.secondaire(nom, R, 0, 0.12, phase=0.8)                                   # léger battement haut-bas
+m.secondaire('racine', R, 1, 0.03, phase=0.5)                                  # le corps se balance avec les coups
+m.secondaire('racine', R, 0, 0.02, phase=1.2)
+m.secondaire('racine', 'location', 1, 0.003, phase=-0.4)                       # et avance par à-coups (Y local = axe du corps)
+# la rafale de queue : une bouffée de trois coups vers le tiers du clip, amortie
+m.secondaire('queue_1', R, 2, 0.12, phase=0.0, enveloppe=m.rafale(0.35, 0.16))
+m.secondaire('queue_2', R, 2, 0.28, phase=-1.0, enveloppe=m.rafale(0.35, 0.16))
+m.cuire('swim')
 
 chemin = exporter_glb('chirurgien.glb')
 inspecter_glb(chemin)

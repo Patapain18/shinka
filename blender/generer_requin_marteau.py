@@ -20,9 +20,11 @@ import numpy as np
 from commun import *
 from peau import *
 from requins import peau_requin
+from mouvement import Mouvement, glisse
 
 nettoyer_scene()
 bm = nouveau_bmesh(zones=('corps', 'tete', 'nageoires', 'caudale', 'yeux'))
+registre = []
 
 # ---------------------------------------------------------------- 1) le corps
 # Plus élancé que le requin gris ; la tête est une plaque : très large, très plate.
@@ -74,10 +76,11 @@ nageoire_loft(bm, (0, 0, -0.10), (0, 0, -1), (0, 1, 0), [
     (0.00, 0.480, 0.800, 0.014), (0.03, 0.500, 0.780, 0.012), (0.06, 0.530, 0.700, 0.009),
     (0.10, 0.570, 0.660, 0.006), (0.13, 0.610, 0.640, 0.0)], segments=12, zone='nageoires')
 for s in (+1, -1):
-    nageoire_loft(bm, (s * 0.17, 0, -0.06), (s * 1.0, 0.12, -0.40), (0, 1, 0), [
+    v = nageoire_loft(bm, (s * 0.17, 0, -0.06), (s * 1.0, 0.12, -0.40), (0, 1, 0), [
         (0.00, -0.800, -0.300, 0.030), (0.06, -0.790, -0.360, 0.027), (0.14, -0.760, -0.450, 0.022),
         (0.24, -0.700, -0.500, 0.017), (0.34, -0.600, -0.480, 0.013), (0.43, -0.490, -0.400, 0.008),
         (0.50, -0.400, -0.330, 0.004), (0.54, -0.350, -0.310, 0.0)], segments=14, zone='nageoires')
+    marquer(bm, v, 'pec_g' if s > 0 else 'pec_d', registre, ((s * 0.17, -0.55, -0.06), 0.16))
     nageoire_loft(bm, (s * 0.10, 0, -0.12), (s * 1.0, 0.35, -0.50), (0, 1, 0), [
         (0.00, 0.280, 0.520, 0.014), (0.05, 0.300, 0.520, 0.012), (0.11, 0.350, 0.540, 0.009),
         (0.17, 0.420, 0.560, 0.005), (0.21, 0.480, 0.550, 0.0)], segments=10, zone='nageoires')
@@ -110,26 +113,39 @@ texturer(requin, 'Peau_RequinMarteau', resolution=2048, resolution_relief=1024, 
          couleur=couleur, hauteur=hauteur, rugosite=rugosite)
 
 # ---------------------------------------------------------------- 5) squelette et nage
-OS = [
-    ('racine',  -0.55,  0.10, None),
-    ('tete',    -0.55, -1.65, 'racine'),
-    ('corps_1',  0.10,  0.50, 'racine'),
-    ('queue_1',  0.50,  0.85, 'corps_1'),
-    ('queue_2',  0.85,  1.20, 'queue_1'),
-    ('queue_3',  1.20,  1.55, 'queue_2'),
-    ('queue_4',  1.55,  1.90, 'queue_3'),
-]
-armature = squelette_colonne('Armature_Marteau', OS)
-peser_colonne(requin, armature, OS)
-animer_nage(armature, {
-    'tete':    (0.035,  0.6),       # la tête balaie : le marteau « scanne » le sable
-    'racine':  (0.020,  0.0),
-    'corps_1': (0.045, -0.7),
-    'queue_1': (0.085, -1.4),
-    'queue_2': (0.125, -2.1),
-    'queue_3': (0.165, -2.8),
-    'queue_4': (0.200, -3.5),
-}, images=72)                                          # 3 s par cycle
+# Colonne de 7 os + un os par pectorale. Onde de nage carangiforme (mouvement.py) : le
+# marteau balaie la tête un peu plus qu'un requin gris (A_tete 2 %) — il « scanne » le
+# sable —, la caudale suit avec retard ; 2 s par battement, quatre battements par clip.
+CHAINE = [('racine', -0.55, 0.05), ('tete', -0.55, -1.54), ('corps_1', 0.05, 0.45), ('corps_2', 0.45, 0.80),
+          ('queue_1', 0.80, 1.05), ('queue_2', 1.05, 1.35), ('caudale', 1.35, 1.85)]
+OS = [('racine',  (0, -0.55, 0), (0, 0.05, 0), None),
+      ('tete',    (0, -0.55, 0), (0, -1.54, 0), 'racine'),
+      ('corps_1', (0, 0.05, 0), (0, 0.45, 0), 'racine'),
+      ('corps_2', (0, 0.45, 0), (0, 0.80, 0), 'corps_1'),
+      ('queue_1', (0, 0.80, 0), (0, 1.05, 0), 'corps_2'),
+      ('queue_2', (0, 1.05, 0), (0, 1.35, 0), 'queue_1'),
+      ('caudale', (0, 1.35, 0), (0, 1.85, 0), 'queue_2'),
+      ('pec_g',   (0.17, -0.55, -0.06), (0.62, -0.40, -0.26), 'racine'),
+      ('pec_d',   (-0.17, -0.55, -0.06), (-0.62, -0.40, -0.26), 'racine')]
+armature = squelette('Armature_Marteau', OS)
+peser_par_parties(requin, armature, OS, registre, colonne=CHAINE)
+
+PERIODE = 2.0
+
+def nage(m):
+    m.modulation(0.12, graine=1)
+    m.onde(CHAINE, longueur=3.39, s_museau=-1.54, A_tete=0.02, A_queue=0.10, exposant=2.0,
+           longueur_onde=1.0, retard_caudal=0.5, s_caudal=0.80)
+    m.secondaire('racine', 'rotation_euler', 1, 0.02, phase=1.2)
+    m.secondaire('tete', 'rotation_euler', 1, 0.03, phase=0.4)                      # la tête roule un peu en balayant
+    for nom, s in (('pec_g', 1), ('pec_d', -1)):
+        m.secondaire(nom, 'rotation_euler', 1, 0.05 * s, phase=0.6)
+        m.secondaire(nom, 'rotation_euler', 0, 0.04, cycles_par_clip=1, phase=0.4 * s)
+
+m = Mouvement(armature, PERIODE, cycles=4)
+nage(m)
+m.cuire('swim')
+glisse(armature, nage, PERIODE)
 
 chemin = exporter_glb('requin-marteau.glb')
 inspecter_glb(chemin)

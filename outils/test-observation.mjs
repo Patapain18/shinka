@@ -15,15 +15,21 @@ try {
   await chrome.naviguer('http://localhost:8792/?direct&heure=13');
   await dormir(4000);
 
-  // Position à l'écran de l'animal le plus proche (calculée DANS la page, avec sa caméra)
+  // Position à l'écran de la cible (calculée DANS la page, avec sa caméra) : l'animal non
+  // observé le plus proche parmi ceux qui sont À L'ÉCRAN, gardé pendant tout le geste (__cible).
   const ecran = `(() => {
     const s = window.__shinka; if (!s.spawner) return null;
-    const visibles = s.spawner.animaux.filter(a => !a.observe);
-    if (!visibles.length) return null;
-    visibles.sort((a, b) => b.objet.position.z - a.objet.position.z);
-    const a = visibles[0];
-    const v = a.objet.position.clone().project(s.camera);
-    return { id: a.espece.id, x: (v.x + 1) / 2 * innerWidth, y: (1 - v.y) / 2 * innerHeight };
+    let a = s.spawner.animaux.find((x) => x.__cible && !x.fini);
+    if (!a) {
+      const v = s.spawner.animaux.filter((x) => !x.observe)
+        .map((x) => ({ x, p: x.objet.position.clone().project(s.camera) }))
+        .filter((o) => Math.abs(o.p.x) < 0.8 && Math.abs(o.p.y) < 0.8 && o.p.z < 1);
+      if (!v.length) return null;
+      v.sort((m, n) => n.x.objet.position.z - m.x.objet.position.z);
+      a = v[0].x; a.__cible = true;
+    }
+    const p = a.objet.position.clone().project(s.camera);
+    return { id: a.espece.id, x: (p.x + 1) / 2 * innerWidth, y: (1 - p.y) / 2 * innerHeight };
   })()`;
 
   let cible = await chrome.evaluer(ecran);

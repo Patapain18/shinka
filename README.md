@@ -9,7 +9,8 @@ visiteur : la nuit, d'autres espèces sortent, et les méduses luisent.
 - **Technique** : HTML/CSS/JS sans bundler, [Three.js](https://threejs.org) via import map,
   Web Audio pour l'ambiance et les sons (générés), musique CC0.
 - **Les animaux** sont générés par des scripts Python pour Blender (`blender/`), exportés en glTF :
-  géométrie par lofts, et une peau calculée point par point (couleur, relief, brillance) en numpy — voir `DESIGN.md` §7.
+  géométrie par lofts, une peau calculée point par point (couleur, relief, brillance) en numpy, et un mouvement
+  écrit comme de la biomécanique (onde de nage sur la ligne médiane, nage et glisse) — voir `DESIGN.md` §7.
 - Tout le projet est décrit dans [DESIGN.md](DESIGN.md).
 
 ## Lancer en local

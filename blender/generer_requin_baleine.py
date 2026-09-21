@@ -20,9 +20,11 @@ from commun import *
 from peau import *
 from peau import _hachage
 from requins import peau_requin
+from mouvement import Mouvement, glisse
 
 nettoyer_scene()
 bm = nouveau_bmesh(zones=('corps', 'nageoires', 'caudale', 'yeux'))
+registre = []
 
 # ---------------------------------------------------------------- 1) le corps
 # Le front est une large section plate (la bouche) refermée par un éventail : la
@@ -58,10 +60,11 @@ nageoire_loft(bm, (0, 0, -0.15), (0, 0, -1), (0, 1, 0), [
     (0.00, 2.40, 2.90, 0.040), (0.08, 2.47, 2.83, 0.030), (0.18, 2.57, 2.75, 0.020), (0.26, 2.66, 2.70, 0.0)],
     segments=12, zone='nageoires')
 for s in (+1, -1):
-    nageoire_loft(bm, (s * 0.75, 0, -0.25), (s * 1.0, 0.15, -0.35), (0, 1, 0), [
+    v = nageoire_loft(bm, (s * 0.75, 0, -0.25), (s * 1.0, 0.15, -0.35), (0, 1, 0), [
         (0.00, -3.50, -2.30, 0.100), (0.15, -3.46, -2.45, 0.090), (0.40, -3.35, -2.70, 0.080),
         (0.70, -3.15, -2.80, 0.060), (1.00, -2.88, -2.62, 0.045), (1.30, -2.55, -2.35, 0.030),
         (1.55, -2.25, -2.12, 0.015), (1.70, -2.05, -2.02, 0.0)], segments=14, zone='nageoires')
+    marquer(bm, v, 'pec_g' if s > 0 else 'pec_d', registre, ((s * 0.75, -2.9, -0.25), 0.55))
     nageoire_loft(bm, (s * 0.45, 0, -0.45), (s * 1.0, 0.40, -0.50), (0, 1, 0), [
         (0.00, 0.80, 1.60, 0.050), (0.15, 0.85, 1.60, 0.045), (0.35, 0.98, 1.65, 0.035),
         (0.55, 1.15, 1.70, 0.020), (0.70, 1.32, 1.68, 0.0)], segments=10, zone='nageoires')
@@ -155,26 +158,38 @@ texturer(requin, 'Peau_RequinBaleine', resolution=2048, resolution_relief=1024, 
          couleur=couleur, hauteur=hauteur, rugosite=rugosite)
 
 # ---------------------------------------------------------------- 5) squelette et nage
-OS = [
-    ('racine',  -1.80,  0.20, None),
-    ('tete',    -1.80, -5.00, 'racine'),
-    ('corps_1',  0.20,  1.40, 'racine'),
-    ('queue_1',  1.40,  2.50, 'corps_1'),
-    ('queue_2',  2.50,  3.50, 'queue_1'),
-    ('queue_3',  3.50,  4.40, 'queue_2'),
-    ('queue_4',  4.40,  5.20, 'queue_3'),
-]
-armature = squelette_colonne('Armature_RequinBaleine', OS)
-peser_colonne(requin, armature, OS)
-animer_nage(armature, {
-    'tete':    (0.012,  0.6),
-    'racine':  (0.015,  0.0),
-    'corps_1': (0.040, -0.7),
-    'queue_1': (0.075, -1.4),
-    'queue_2': (0.110, -2.1),
-    'queue_3': (0.150, -2.8),
-    'queue_4': (0.190, -3.5),
-}, images=144)                                         # 6 s par ondulation : un géant tranquille
+# Colonne de 7 os + un os par pectorale. Un géant tranquille : 4,5 s par ondulation,
+# tout le corps participe (exposant 1,7), amplitude de queue 8,5 % ; trois ondulations
+# par clip, avec une modulation lente — et une glisse longue (il plane beaucoup).
+CHAINE = [('racine', -1.8, 0.2), ('tete', -1.8, -5.0), ('corps_1', 0.2, 1.4), ('corps_2', 1.4, 2.4),
+          ('queue_1', 2.4, 3.2), ('queue_2', 3.2, 3.9), ('caudale', 3.9, 5.1)]
+OS = [('racine',  (0, -1.8, 0), (0, 0.2, 0), None),
+      ('tete',    (0, -1.8, 0), (0, -5.0, 0), 'racine'),
+      ('corps_1', (0, 0.2, 0), (0, 1.4, 0), 'racine'),
+      ('corps_2', (0, 1.4, 0), (0, 2.4, 0), 'corps_1'),
+      ('queue_1', (0, 2.4, 0), (0, 3.2, 0), 'corps_2'),
+      ('queue_2', (0, 3.2, 0), (0, 3.9, 0), 'queue_1'),
+      ('caudale', (0, 3.9, 0), (0, 5.1, 0), 'queue_2'),
+      ('pec_g',   (0.75, -2.9, -0.25), (2.3, -2.5, -0.8), 'tete'),
+      ('pec_d',   (-0.75, -2.9, -0.25), (-2.3, -2.5, -0.8), 'tete')]
+armature = squelette('Armature_RequinBaleine', OS)
+peser_par_parties(requin, armature, OS, registre, colonne=CHAINE)
+
+PERIODE = 4.5
+
+def nage(m):
+    m.modulation(0.15, graine=2)
+    m.onde(CHAINE, longueur=10.1, s_museau=-5.0, A_tete=0.01, A_queue=0.085, exposant=1.7,
+           longueur_onde=1.15, retard_caudal=0.4, s_caudal=0.80)
+    m.secondaire('racine', 'rotation_euler', 1, 0.015, phase=1.2)
+    for nom, s in (('pec_g', 1), ('pec_d', -1)):
+        m.secondaire(nom, 'rotation_euler', 1, 0.04 * s, phase=0.8)
+        m.secondaire(nom, 'rotation_euler', 0, 0.05, cycles_par_clip=1, phase=0.5 * s)
+
+m = Mouvement(armature, PERIODE, cycles=3)
+nage(m)
+m.cuire('swim')
+glisse(armature, nage, PERIODE, facteur_amplitude=0.18, facteur_periode=1.6, cycles=2)
 
 chemin = exporter_glb('requin-baleine.glb')
 inspecter_glb(chemin)
