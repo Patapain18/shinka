@@ -200,7 +200,8 @@ def nageoire_loft(bm, origine, envergure, corde, sections, segments=12, zone=Non
     sections = [(s, attaque, fuite, demi_epaisseur), …] : à la distance s le long
     de l'envergure, le bord d'attaque est à `attaque` et le bord de fuite à `fuite`
     le long de la corde (mesurés depuis l'origine). La dernière section donne le
-    bout : un point à mi-corde (pointe=True) ou une petite arête.
+    bout : un point à mi-corde (pointe=True), ou — pointe=False — une dernière
+    section entière refermée par une face plate (caudale tronquée, bout carré).
     Couches : u = envergure (0 racine → 1 bout), v = corde (0 attaque → 1 fuite)."""
     E, C = Vector(envergure).normalized(), Vector(corde).normalized()
     Nn = E.cross(C).normalized()
@@ -227,21 +228,60 @@ def nageoire_loft(bm, origine, envergure, corde, sections, segments=12, zone=Non
             ring.append(vtx)
         rings.append(ring)
         sommets += ring
-    s, attaque, fuite, _ = sections[-1]
-    bout = bm.verts.new(O + E * s + C * ((attaque + fuite) / 2))
-    bout[cu], bout[cv] = 1.0, 0.5
-    if couche_zone is not None:
-        bout[couche_zone] = 1.0
+    s, attaque, fuite, e = sections[-1]
     n = segments
+    extremite = []
+    if pointe:
+        bout = bm.verts.new(O + E * s + C * ((attaque + fuite) / 2))
+        bout[cu], bout[cv] = 1.0, 0.5
+        if couche_zone is not None:
+            bout[couche_zone] = 1.0
+        extremite = [bout]
+    else:                                                     # dernière section entière (bout tronqué)
+        ring = []
+        for k in range(n):
+            a = 2 * math.pi * k / n
+            c = (1 - math.cos(a)) / 2
+            pos = O + E * s + C * (attaque + c * (fuite - attaque)) + Nn * (max(e, 1e-4) * _naca(c) * math.sin(a))
+            vtx = bm.verts.new(pos)
+            vtx[cu], vtx[cv] = 1.0, c
+            if couche_zone is not None:
+                vtx[couche_zone] = 1.0
+            ring.append(vtx)
+        rings.append(ring)
+        extremite = ring
     faces = []
     for A, B in zip(rings, rings[1:]):
         for k in range(n):
             faces.append(bm.faces.new((A[k], B[k], B[(k + 1) % n], A[(k + 1) % n])))
-    for k in range(n):
-        faces.append(bm.faces.new((rings[-1][(k + 1) % n], rings[-1][k], bout)))
+    if pointe:
+        for k in range(n):
+            faces.append(bm.faces.new((rings[-1][(k + 1) % n], rings[-1][k], bout)))
+    else:
+        faces.append(bm.faces.new(rings[-1]))                 # la face du bout (regarde vers +E)
     faces.append(bm.faces.new(list(reversed(rings[0]))))      # l'emplanture, fermée (elle est dans le corps)
     _orienter(bm, faces)
-    return [bout] + sommets
+    return extremite + sommets
+
+
+def sections_voile(bord, y0, y1, z_base, e_base, n=8):
+    """Les sections d'une nageoire « voile » (dorsale ou anale longue) pour
+    nageoire_loft(origine=(0, 0, z_base), envergure=±Z, corde=+Y) : bord(y) = hauteur
+    du bord libre au-dessus de z_base (positive), pour y ∈ [y0, y1]. À la hauteur s,
+    la corde va du premier au dernier y où bord(y) ≥ s : la nageoire épouse la
+    courbe du dos, plus haute là où le dos est haut. Épaisseur qui s'effile."""
+    ys = [y0 + (y1 - y0) * i / 300 for i in range(301)]
+    zs = [bord(y) for y in ys]
+    s_max = max(zs)
+    sections = []
+    for k in range(n):
+        s = s_max * (k / n) ** 1.3                    # sections resserrées près de la base
+        dedans = [y for y, z in zip(ys, zs) if z >= s]
+        e = e_base * (1 - s / s_max) ** 0.6 + 1e-4
+        sections.append((s, min(dedans), max(dedans), e))
+    y_top = ys[zs.index(s_max)]
+    sections.append((s_max, y_top - 0.002, y_top + 0.002, 0.0))
+    return sections
 
 
 def revolution(bm, profil, segments=32, centre=(0.0, 0.0, 0.0), zone=None):

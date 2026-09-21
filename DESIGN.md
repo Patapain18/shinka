@@ -228,29 +228,46 @@ Debug : `?heure=23` fige l'heure, `?tempo=600` fait défiler une journée en 2 m
 > `Blender --background --factory-startup --python …`). Les conventions ci-dessous restent la règle : le script
 > les applique, et elles servent aussi si un jour un modèle vient d'ailleurs (asset CC0, modèle fait main).
 
-### 7.0 Comment on fabrique un animal (état au 2026-09-21)
+### 7.0 Comment on fabrique un animal (v2, 2026-09-21)
 
 ```bash
 /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python blender/generer_requin_recif.py
 ```
 
-- `blender/commun.py` — la boîte à outils : `corps_fusiforme` (corps par anneaux), `nageoire` (plaque fine
-  avec *crease* sur le contour), `sphere` (yeux), `colorer_ventre_dos` (couleurs par sommet), `materiau_peau`,
-  `squelette_colonne`, `peser_colonne` (poids calculés à la main), `animer_nage` (action `swim`),
-  `exporter_glb`, `inspecter_glb` (relit le fichier et résume : triangles, étendue, os, animations).
-- `blender/generer_<id>.py` — la recette d'UNE espèce : profil du corps, polygones des nageoires, os, amplitudes.
-- `outils/visionneuse.html?modele=<id>&vue=cote|face|dessus|trois-quarts&ambiance=atelier|bassin` —
-  contrôle visuel (grille 1 m, axes : le museau doit pointer vers le bleu = +Z), animation jouée, infos à l'écran.
-- Leçon : **sans crease, la subdivision de surface fond les nageoires en boudins**. `nageoire()` plie le contour.
-- Faits (7) : `requin-recif`, `chirurgien`, `requin-marteau`, `requin-baleine` (colonne d'os, nage codée par `animer_nage`),
-  `manta` (ailes par `aile()` : loft de sections elliptiques le long de X, 2 os par aile, battement déphasé),
-  `tortue` (squelette libre : cou, tête, 4 nageoires, queue ; nage par `animer_os` : battement + balayage en
-  quadrature), `meduse` (cloche animée par ÉCHELLE d'os, bras sans héritage d'échelle, matériau translucide
-  `alpha=0.45` double face, `emission` dans le catalogue → luit la nuit via `facteurNuit()` dans `animal.js`).
-- **Leçons Blender (2026-09-21)** : (1) créer les couches de données (`nouveau_bmesh()`) AVANT toute géométrie —
-  en ajouter une après invalide les références aux sommets et l'ordre n'est plus fiable ; (2) ne jamais
-  peser par plages d'indices : on **étiquette** les sommets à la création (`marquer()`, couche entière « partie »)
-  et `peser_par_parties()` lit l'étiquette dans le maillage final ; (3) `bm.verts[i]` exige `ensure_lookup_table()`.
+Trois fichiers partagés, un script par espèce :
+- `blender/commun.py` — la géométrie et le rig : `corps()` (loft le long de Y : clés `(y, demi-largeur, haut, bas,
+  centre_z)`, sections super-elliptiques, interpolation Catmull-Rom, anneaux resserrés aux bouts), `nageoire_loft()`
+  (une nageoire ÉPAISSE : loft de sections `(s, attaque, fuite, épaisseur)` le long de l'envergure, profil NACA,
+  bout pointu ou tronqué), `sections_voile()` (dorsale/anale longue qui épouse le dos), `revolution()` (cloche),
+  `nageoire()` (plaque mince, pour les tentacules), `sphere()`/`ellipsoide()`, `marquer()` (os) et `marquer_zone()`
+  (peau), `squelette()`, `peser_par_parties()` (+ `colonne=` pour le corps), `animer_os()` (forme d'onde au choix),
+  `exporter_glb()` (tangentes, images), `inspecter_glb()`.
+- `blender/peau.py` — la PEAU, calculée point par point sur une image : `texturer(obj, nom, resolution, couleur,
+  hauteur, rugosite, alpha, emission)`. Dépliage UV automatique (Smart UV Project), rasterisation UV → position 3D,
+  normale, repère tangent et coordonnées « corps » (`u` le long / `v` autour, ou envergure / corde d'une nageoire),
+  dilatation (jump flooding) pour les coutures, puis les fonctions de l'espèce, vectorisées numpy, décident de chaque
+  texel : couleur (JPEG sRGB), relief en mètres → carte de normales tangentes (PNG), rugosité + métal (ORM JPEG),
+  alpha et émission si besoin. Bruit `bruit()`/`fbm()`, Voronoï `cellules()`, `lisser()`, `melanger()`, `trait()`,
+  `angle_vers()` (yeux). Résolutions : couleur 2048² (gros animaux) ou 1024², relief ÷2, ORM ÷4.
+- `blender/requins.py` — la grammaire de peau commune aux trois requins (`peau_requin(cfg)` : contre-ombre,
+  cinq fentes, bouche ventrale, narines, yeux, pointes, bordure de caudale, `motif`/`relief_extra` optionnels).
+- `blender/generer_<id>.py` — la recette d'UNE espèce : clés du corps, sections des nageoires, fonctions de peau,
+  os, amplitudes. L'en-tête de chaque script dit ce qui fait l'espèce, et où ça se voit dans le code.
+- Contrôle : `outils/visionneuse.html?modele=<id>&vue=cote|face|dessus|dessous|trois-quarts[-dessous]&cible=x,y,z&zoom=3`,
+  `outils/planche.html` (les neuf vignettes), `blender/verifier_relief.py` (le test de signe des cartes de normales).
+
+**Leçons Blender / Three (v2)** :
+1. `recalc_face_normals` se trompe sur les formes MINCES (une nageoire à bord de fuite effilé) : les primitives
+   construisent leurs faces vers l'extérieur et les marquent (`_orienter`) ; on ne recalcule que le reste.
+2. Dans `nageoire_loft`, `fuite` doit toujours dépasser `attaque` (sinon la section est retournée) : garde-fou.
+3. Carte de normales : avec les tangentes exportées par Blender, Three attend les composantes X et Y INVERSÉES par
+   rapport à la formule classique — vérifié par `verifier_relief.py` (une bosse géométrique et une bosse « en carte »
+   doivent s'éclairer pareil). Ne pas « corriger » sans refaire ce test.
+4. La rasterisation se fait sur le maillage ÉVALUÉ (subdivision comprise) : ce sont les UV que l'exporteur écrit.
+5. Les zones de peau sont des attributs flottants (`zone_<nom>`, `u`, `v`) posés sur les sommets à la construction :
+   la subdivision les interpole, la texture les lit. Un matériau ne s'exporte qu'avec des nœuds Image Texture.
+6. Les copies de matériaux ne coûtent rien sur le GPU (voir §8 robustesse) ; les images, si : 2048² seulement pour
+   les gros animaux. Total des neuf `.glb` : ≈ 15 Mo (contre 2,5 Mo en v1).
 
 ### 7.1 Unités et échelle
 - **1 unité Blender = 1 mètre.** Modélise à la vraie taille (requin 1,8 m, sardine 0,2 m).
@@ -280,14 +297,15 @@ Debug : `?heure=23` fige l'heure, `?tempo=600` fait défiler une journée en 2 m
 
 ### 7.4 Matériaux
 - Uniquement **Principled BSDF**. Textures via nœuds *Image Texture* (base color, roughness, normal via *Normal Map*).
-- Tout nœud procédural (Noise, Voronoi, ColorRamp…) **n'est pas exporté** → le cuire (bake) en image.
-- Textures : 1024² pour les petits, 2048² max pour les gros. Un seul matériau par animal si possible.
+- Tout nœud procédural (Noise, Voronoi, ColorRamp…) **n'est pas exporté** → c'est pour ça que `peau.py` calcule
+  les images en numpy (et ne cuit rien dans Cycles).
+- Textures : 1024² pour les petits, 2048² pour les gros ; relief ÷2, rugosité ÷4. Un seul matériau par animal.
 - Méduse : matériau `Alpha Blend` + `Emission` (on animera l'émission la nuit depuis le code).
 
 ### 7.5 Budget
 - Petits poissons : 500-1 500 triangles (ils seront instanciés par centaines).
 - Animaux moyens : 3 000-8 000. Gros (manta, requin-baleine) : 10 000-20 000 max.
-- Fichier : < 2 Mo par animal, < 5 Mo pour le requin-baleine.
+- Fichier : < 2 Mo par animal, < 3 Mo pour les gros (v2 : 1 à 2,6 Mo, textures comprises).
 
 ### 7.6 Export
 `File → Export → glTF 2.0` :

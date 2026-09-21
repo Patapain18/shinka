@@ -157,7 +157,7 @@ export const ESPECES = [
     latin: 'Sardina pilchardus',
     rarete: 'commun',
     heures: ['aube', 'jour', 'crepuscule'],
-    taille: 0.16,
+    taille: 0.2,
     vitesse: 0.8,
     profondeur: [-0.5, 2.5],
     distance: [-3, -9],
