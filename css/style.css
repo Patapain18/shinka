@@ -109,6 +109,27 @@ html, body {
   color: var(--brume);
 }
 
+.btn-entrer:disabled {
+  opacity: .35;
+  cursor: default;
+  letter-spacing: .25em;
+}
+
+/* Barre de chargement : un trait fin sous le bouton, qui se remplit */
+.entree-barre {
+  width: 180px;
+  height: 1px;
+  margin: 1.2rem auto 0;
+  background: rgba(217, 236, 245, .12);
+  overflow: hidden;
+}
+.entree-barre > div {
+  height: 100%;
+  width: 0;
+  background: var(--ecume);
+  transition: width .3s ease;
+}
+
 .entree-note {
   margin-top: 1.4rem;
   font-size: .7rem;

@@ -341,7 +341,7 @@ Chaque étape donne quelque chose de visible et qui marche. On n'attaque pas la 
 |---|---|---|
 | 1 | ✅ 2026-09-21 — Squelette : `index.html`, écran d'entrée, scène bleue avec brouillard + lumière, boucle, `lancer.command` | Un bassin vide, mais déjà « profond » |
 | 2 | ✅ 2026-09-21 — L'eau : rayons, particules, caustiques, sol (`water.js`) | Beau sans aucun animal |
-| 3 | Placeholders : capsules qui traversent sur des trajectoires courbes ; spawner de base | Ça vit |
+| 3 | ✅ 2026-09-21 — Les animaux : catalogue (`species.js`), chargeur + clonage de squelette (`modeles.js`), classe `Animal` (courbe Catmull-Rom + `AnimationMixer`), spawner de base, barre de chargement | Ça vit |
 | 4 | Catalogue + paliers de rareté + heure réelle (lumière qui suit l'heure) | Nuit ≠ jour |
 | 5 | Observation : raycast, jauge, halo, toasts ; collection localStorage | Le cœur du site |
 | 6 | Carnet : panneau, grille, fiches, silhouettes | On peut « collectionner » |

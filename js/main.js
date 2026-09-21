@@ -4,11 +4,15 @@
    Rôle : brancher les modules entre eux et faire tourner la boucle.
    Étape 1 : écran d'entrée, parallaxe souris, rendu du bassin vide.
    Étape 2 : l'eau (water.js) mise à jour à chaque frame.
+   Étape 3 : chargement des modèles, puis le spawner fait passer les animaux.
    ============================================ */
 
 import * as THREE from 'three';
 import { creerRenderer, scene, camera, pointRegarde, redimensionner, BASSIN } from './scene.js';
 import { creerEau } from './water.js';
+import { ESPECES } from './species.js';
+import { chargerModeles } from './modeles.js';
+import { creerSpawner } from './spawner.js';
 
 /* ---------- Le renderer, avec filet de sécurité ---------- */
 // Si WebGL est indisponible, on le dit au visiteur au lieu de lui laisser un écran noir.
@@ -30,10 +34,25 @@ try {
 /* ---------- L'eau : sol, rayons, particules ---------- */
 const eau = creerEau(scene, camera);
 
-/* ---------- Écran d'entrée ---------- */
+/* ---------- Chargement des modèles, puis écran d'entrée ---------- */
 // Raccourci de développement : http://localhost:8792/?direct saute l'écran d'entrée.
 // Pratique quand on retouche la scène 50 fois de suite (et pour les captures automatiques).
-if (new URLSearchParams(location.search).has('direct')) entree.remove();
+const direct = new URLSearchParams(location.search).has('direct');
+const barre = document.getElementById('barre-chargement');
+
+let spawner = null;   // n'existe qu'une fois les modèles chargés
+
+chargerModeles(ESPECES, (progression) => { barre.style.width = `${Math.round(progression * 100)}%`; })
+  .then(() => {
+    spawner = creerSpawner(scene, camera);
+    if (direct) { entree.remove(); return; }
+    btnEntrer.disabled = false;
+    btnEntrer.textContent = 'Entrer';
+  })
+  .catch((erreur) => {
+    console.error(erreur);
+    btnEntrer.textContent = 'Les modèles n’ont pas pu être chargés';
+  });
 
 btnEntrer.addEventListener('click', () => {
   entree.classList.add('cache');   // le CSS fait le fondu de 2,5 s
@@ -81,6 +100,7 @@ function boucle() {
 
   majParallaxe(dt);
   eau.maj(dt, temps);
+  spawner?.maj(dt);               // « ?. » : ne fait rien tant que spawner vaut null
   renderer.render(scene, camera);
 
   requestAnimationFrame(boucle);   // « rappelle-moi à la prochaine image »
