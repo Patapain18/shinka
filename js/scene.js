@@ -2,7 +2,8 @@
    SCENE — le bassin vide
    ============================================
    Ce module crée et exporte tout ce qui est « le décor » :
-   renderer, caméra, lumières, brouillard, sol, rochers.
+   renderer, caméra, lumières, brouillard, rochers. (L'eau : sol, rayons,
+   particules — vit dans water.js.)
    Il ne sait rien des animaux, de la souris ou de l'UI : c'est main.js
    qui orchestre. Règle du projet : un module = une responsabilité.
    ============================================ */
@@ -62,25 +63,16 @@ camera.lookAt(pointRegarde);
 
 /* ---------- 4) Lumières ---------- */
 // Le soleil filtré par 6 m d'eau : bleuté, vient d'en haut, un peu de face.
-const soleil = new THREE.DirectionalLight(0x9fd4ff, 2.2);
+const soleil = new THREE.DirectionalLight(0x9fd4ff, 2.6);
 soleil.position.set(2, 14, -6);
 scene.add(soleil);
 
 // Lumière d'ambiance à deux couleurs : « ciel » (bleu sombre) en haut, « sol » (noir) en bas.
 // Sans elle, tout ce qui n'est pas face au soleil serait d'un noir absolu.
-const ambiance = new THREE.HemisphereLight(0x0e3a5c, 0x000000, 0.7);
+const ambiance = new THREE.HemisphereLight(0x0e3a5c, 0x000000, 0.9);
 scene.add(ambiance);
 
-/* ---------- 5) Le sol : du sable qui se perd dans la brume ---------- */
-const sol = new THREE.Mesh(
-  new THREE.PlaneGeometry(200, 200),
-  new THREE.MeshStandardMaterial({ color: 0x2a4652, roughness: 1 })
-);
-sol.rotation.x = -Math.PI / 2;   // un plan est vertical par défaut : on le couche
-sol.position.y = BASSIN.sol;
-scene.add(sol);
-
-/* ---------- 6) Des rochers, pour donner des repères de profondeur ---------- */
+/* ---------- 5) Des rochers, pour donner des repères de profondeur ---------- */
 // Sans objets étagés en distance, le brouillard n'a rien à révéler.
 // IcosahedronGeometry(rayon, 1) : une boule à 80 facettes, parfaite en rocher low-poly.
 const materiauRoche = new THREE.MeshStandardMaterial({
@@ -103,7 +95,7 @@ for (const [x, z, rayon] of ROCHERS) {
   scene.add(rocher);
 }
 
-/* ---------- 7) Redimensionnement de la fenêtre ---------- */
+/* ---------- 6) Redimensionnement de la fenêtre ---------- */
 export function redimensionner(renderer) {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();     // obligatoire après avoir touché aspect ou fov

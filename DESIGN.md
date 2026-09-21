@@ -18,10 +18,10 @@ Le mot-clé : **contemplation**. On ne « joue » pas, on reste.
 | Sujet | Décision | Conséquence |
 |---|---|---|
 | Style visuel | **Réaliste & sombre** (grand bassin, eau profonde, rayons de lumière) | Peu d'animaux à l'écran mais soignés ; le brouillard et la lumière font 70 % du rendu |
-| Modèles 3D | **Modélisés par Mathis dans Blender**, riggés et animés | Le site se construit avec des *placeholders* ; chaque modèle fini remplace le sien. Voir §7 (pipeline) |
+| Modèles 3D | ~~Modélisés par Mathis~~ → **générés par des scripts Python Blender écrits par Claude** (`blender/generer_<id>.py`), riggés et animés par le script (changé le 2026-09-21) | Reproductible et versionné dans git. Les conventions du §7 sont appliquées par le script. Vérification dans `outils/visionneuse.html` |
 | Musique | **Libre de droits** (CC0 / CC-BY), sélection à faire | Playlist + fondu enchaîné + couche d'ambiance sous-marine. Crédits obligatoires pour le CC-BY |
 | Contexte | **Projet perso**, collection en **localStorage** | Zéro backend. Déploiement statique (GitHub Pages) |
-| Animation | **Rig + cycle de nage dans Blender** (export GLB) | On joue les clips avec `AnimationMixer`. Convention de nommage stricte (§7) |
+| Animation | **Rig + cycle de nage générés par le script Blender** (export GLB) | On joue les clips avec `AnimationMixer`. Convention de nommage stricte (§7) |
 | Capture | **Observer** : garder le curseur sur l'animal ~2-3 s, une jauge se remplit | Pas de clic frénétique. Un rare qui passe vite peut échapper |
 | Rareté | **4 paliers** + **heure réelle** (jour/nuit du visiteur) + **événements rares** | Raison de revenir à d'autres heures |
 | Caméra | **Fixe + parallaxe souris** | Cinématique. Pas de contrôle tactile complexe |
@@ -221,11 +221,11 @@ forcer une heure pour tester sans attendre minuit.
 
 ---
 
-## 7. Pipeline Blender → site (à lire AVANT de modéliser)
+## 7. Pipeline Blender → site
 
-C'est la section la plus importante pour toi. Si ces conventions sont respectées, un animal
-s'ajoute au site en déposant deux fichiers. Si elles ne le sont pas, on passe une heure à
-déboguer une orientation ou une échelle.
+> Depuis le 2026-09-21 les modèles sont **générés par des scripts** (`blender/generer_<id>.py`, lancés avec
+> `Blender --background --factory-startup --python …`). Les conventions ci-dessous restent la règle : le script
+> les applique, et elles servent aussi si un jour un modèle vient d'ailleurs (asset CC0, modèle fait main).
 
 ### 7.1 Unités et échelle
 - **1 unité Blender = 1 mètre.** Modélise à la vraie taille (requin 1,8 m, sardine 0,2 m).
@@ -296,6 +296,8 @@ La même image sert pour la silhouette (« ??? ») via un filtre CSS, et pour la
 - **Vitre** : vignette, très léger reflet spéculaire en haut, distorsion minime aux bords,
   grain de film (comme `lusion_clone`).
 - **Post-processing** : `EffectComposer` → `RenderPass` → `UnrealBloomPass` (faible, 0,3) → passe custom (vignette, grain).
+- **Leçon apprise (étape 2)** : dans un `ShaderMaterial` avec `fog: true`, il FAUT les uniforms `UniformsLib.fog` (sinon Three plante au rendu),
+  et l'ordre en fin de fragment est `tonemapping → colorspace → fog` (Three fournit `fogColor` déjà en sRGB).
 - **Perf** : `pixelRatio` ≤ 1,5 ; max 12 animaux ; bancs en `InstancedMesh` ; modèles chargés à la
   première apparition puis mis en cache ; option « qualité » (bloom off) si ça rame.
 
@@ -322,7 +324,7 @@ Chaque étape donne quelque chose de visible et qui marche. On n'attaque pas la 
 | # | Étape | Résultat visible |
 |---|---|---|
 | 1 | ✅ 2026-09-21 — Squelette : `index.html`, écran d'entrée, scène bleue avec brouillard + lumière, boucle, `lancer.command` | Un bassin vide, mais déjà « profond » |
-| 2 | L'eau : rayons, particules, caustiques, sol | Beau sans aucun animal |
+| 2 | ✅ 2026-09-21 — L'eau : rayons, particules, caustiques, sol (`water.js`) | Beau sans aucun animal |
 | 3 | Placeholders : capsules qui traversent sur des trajectoires courbes ; spawner de base | Ça vit |
 | 4 | Catalogue + paliers de rareté + heure réelle (lumière qui suit l'heure) | Nuit ≠ jour |
 | 5 | Observation : raycast, jauge, halo, toasts ; collection localStorage | Le cœur du site |
@@ -339,7 +341,7 @@ L'étape 8 peut remonter dès que le premier `.glb` existe — le loader sera pr
 ## 11. Questions encore ouvertes
 
 - ~~Nom~~ → **Shinka** (décidé le 2026-09-21).
-- ~~Niveau Blender~~ → jamais riggé : guide pas-à-pas `BLENDER.md` à écrire, premier rig = requin gris, 4 os.
+- ~~Niveau Blender~~ → Mathis ne modélise pas : les animaux sont générés par script (`blender/`). Premier : requin gris de récif.
 - ~~Liste d'espèces~~ → v1 validée, premier modèle = requin gris de récif.
 - ~~Git~~ → dépôt initialisé le 2026-09-21. Déploiement GitHub Pages (`Patapain18`) à l'étape 10.
 - **Rythme** : pas de deadline (perso). Sessions courtes, une étape à la fois.

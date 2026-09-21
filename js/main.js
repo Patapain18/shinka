@@ -3,10 +3,12 @@
    ============================================
    Rôle : brancher les modules entre eux et faire tourner la boucle.
    Étape 1 : écran d'entrée, parallaxe souris, rendu du bassin vide.
+   Étape 2 : l'eau (water.js) mise à jour à chaque frame.
    ============================================ */
 
 import * as THREE from 'three';
 import { creerRenderer, scene, camera, pointRegarde, redimensionner, BASSIN } from './scene.js';
+import { creerEau } from './water.js';
 
 /* ---------- Le renderer, avec filet de sécurité ---------- */
 // Si WebGL est indisponible, on le dit au visiteur au lieu de lui laisser un écran noir.
@@ -24,6 +26,9 @@ try {
   }));
   throw err;   // on arrête tout ici : rien d'autre n'a de sens sans renderer
 }
+
+/* ---------- L'eau : sol, rayons, particules ---------- */
+const eau = creerEau(scene, camera);
 
 /* ---------- Écran d'entrée ---------- */
 // Raccourci de développement : http://localhost:8792/?direct saute l'écran d'entrée.
@@ -72,7 +77,10 @@ function boucle() {
   // pas qu'au retour tout « saute » de 30 s d'un coup.
   const dt = Math.min(horloge.getDelta(), 0.1);
 
+  const temps = horloge.elapsedTime;   // secondes depuis le lancement (pour les shaders)
+
   majParallaxe(dt);
+  eau.maj(dt, temps);
   renderer.render(scene, camera);
 
   requestAnimationFrame(boucle);   // « rappelle-moi à la prochaine image »
