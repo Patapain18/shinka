@@ -37,6 +37,7 @@
     const vue      = params.get('vue')      || 'trois-quarts';
     const ambiance = params.get('ambiance') || 'atelier';
     const vignette = params.has('vignette');   // image pour le carnet : fond transparent, profil, sans repères
+    const tempsFige = params.has('temps') ? parseFloat(params.get('temps')) : null;   // &temps=1.5 : pose figée à cet instant
 
     const infos = document.getElementById('infos');
     const log = (...a) => { infos.textContent += '\n' + a.join(' '); };
@@ -111,13 +112,18 @@
       log(`animations : ${gltf.animations.map(a => `${a.name} (${a.duration.toFixed(2)} s)`).join(', ') || 'aucune'}`);
       const clip = THREE.AnimationClip.findByName(gltf.animations, nomAnim);
       // vignette : pose neutre, pas d'animation
-      if (clip && !vignette) { mixer = new THREE.AnimationMixer(gltf.scene); mixer.clipAction(clip).play(); log(`lecture : ${nomAnim}`); }
+      if (clip && !vignette) {
+        mixer = new THREE.AnimationMixer(gltf.scene); mixer.clipAction(clip).play();
+        if (tempsFige !== null) { mixer.setTime(tempsFige); log(`pose figée à t = ${tempsFige} s`); } else log(`lecture : ${nomAnim}`);
+      }
       else log(`⚠ pas d'animation « ${nomAnim} »`);
+      window.__visionneuse = { gltf, mixer, scene, camera };
     }, undefined, (err) => log('ERREUR de chargement :', err.message || err));
 
     const horloge = new THREE.Clock();
     (function boucle() {
-      if (mixer) mixer.update(horloge.getDelta());
+      const dt = horloge.getDelta();
+      if (mixer && tempsFige === null) mixer.update(dt);
       controls.update();
       renderer.render(scene, camera);
       requestAnimationFrame(boucle);

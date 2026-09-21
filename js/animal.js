@@ -8,6 +8,7 @@
 
 import * as THREE from 'three';
 import { instancier } from './modeles.js';
+import { facteurNuit } from './daytime.js';
 
 const _cible = new THREE.Vector3();   // vecteur de travail, réutilisé (pas d'allocation à chaque frame)
 
@@ -17,8 +18,9 @@ export class Animal {
    * @param trajectoire THREE.Curve (CatmullRomCurve3) à parcourir de u = 0 à u = 1
    * @param uDepart     0 = entre par le bord ; 0.5 = apparaît déjà au milieu (peuplement initial)
    * @param vitesse     m/s imposée (les membres d'un groupe partagent la même) ; sinon tirée au sort
+   * @param horloge     l'horloge du jour (pour les espèces qui luisent la nuit)
    */
-  constructor(espece, trajectoire, uDepart = 0, vitesse = null) {
+  constructor(espece, trajectoire, uDepart = 0, vitesse = null, horloge = null) {
     this.espece = espece;
     this.fini = false;
 
@@ -35,6 +37,9 @@ export class Animal {
     });
     this.observe = false;      // validé pendant ce passage ?
     this.haloRestant = 0;      // secondes de halo encore à jouer
+    this.horloge = horloge;
+    this.emission = espece.emission ? new THREE.Color(espece.emission) : null;   // luit la nuit
+    this.lumiereActive = false;
 
     // Chaque individu nage un peu plus vite ou plus lentement que la moyenne…
     this.vitesse = vitesse ?? espece.vitesse * THREE.MathUtils.randFloat(0.85, 1.15);
@@ -62,7 +67,7 @@ export class Animal {
     if (this.u >= 1) { this.fini = true; return; }
     this.placer();
     this.mixer.update(dt);
-    this.majHalo(dt);
+    this.majLumiere(dt);
   }
 
   /** Une lueur brève sur l'animal : il vient d'être observé. */
@@ -71,13 +76,25 @@ export class Animal {
     this.haloRestant = duree;
   }
 
-  majHalo(dt) {
-    if (this.haloRestant <= 0) return;
-    this.haloRestant = Math.max(0, this.haloRestant - dt);
-    // Monte vite, redescend lentement : sin(π·t) déformé vers le début
-    const t = 1 - this.haloRestant / this.haloDuree;
-    const k = Math.sin(Math.PI * Math.pow(t, 0.55)) * 0.14;
-    for (const m of this.materiaux) m.emissive.setRGB(0.35 * k, 0.7 * k, 1.0 * k);   // lueur bleutée
+  /** L'émissif du matériau = le halo d'observation + (pour une espèce qui luit) la nuit. */
+  majLumiere(dt) {
+    let kHalo = 0;
+    if (this.haloRestant > 0) {
+      this.haloRestant = Math.max(0, this.haloRestant - dt);
+      // Monte vite, redescend lentement : sin(π·t) déformé vers le début
+      const t = 1 - this.haloRestant / this.haloDuree;
+      kHalo = Math.sin(Math.PI * Math.pow(t, 0.55)) * 0.14;
+    }
+    const kNuit = (this.emission && this.horloge) ? 0.05 + 0.6 * facteurNuit(this.horloge.heure) : 0;
+    const actif = kHalo > 0 || kNuit > 0;
+    if (!actif && !this.lumiereActive) return;          // rien à faire, rien à éteindre
+    this.lumiereActive = actif;
+    const e = this.emission;
+    for (const m of this.materiaux) {
+      m.emissive.setRGB(0.35 * kHalo + (e ? e.r * kNuit : 0),
+                        0.70 * kHalo + (e ? e.g * kNuit : 0),
+                        1.00 * kHalo + (e ? e.b * kNuit : 0));
+    }
   }
 
   placer() {

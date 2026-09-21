@@ -21,6 +21,14 @@ export function phaseDe(heure) {
   return 'nuit';
 }
 
+/* 0 en plein jour, 1 en pleine nuit, transitions douces : pour ce qui luit dans le noir */
+export function facteurNuit(h) {
+  if (h >= 8 && h < 18) return 0;
+  if (h >= 22 || h < 5) return 1;
+  if (h >= 18) return (h - 18) / 4;          // 18 h → 22 h : 0 → 1
+  return 1 - (h - 5) / 3;                    //  5 h →  8 h : 1 → 0
+}
+
 /* Repères de lumière. brume = couleur du brouillard ET du fond ; soleil = couleur de
    la lumière directionnelle ; le reste = multiplicateurs des réglages « plein jour »
    définis dans scene.js et water.js (1 = inchangé). */

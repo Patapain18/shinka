@@ -100,7 +100,7 @@ export function creerSpawner(scene, camera, horloge, { surEntree } = {}) {
         ? new THREE.Vector3(THREE.MathUtils.randFloatSpread(1.6), THREE.MathUtils.randFloatSpread(0.8), THREE.MathUtils.randFloatSpread(1.2))
             .multiplyScalar(espece.taille * 2)
         : rien;
-      const animal = new Animal(espece, courbe(points, decalage), uDepart, vitesse * (nb > 1 ? THREE.MathUtils.randFloat(0.97, 1.03) : 1));
+      const animal = new Animal(espece, courbe(points, decalage), uDepart, vitesse * (nb > 1 ? THREE.MathUtils.randFloat(0.97, 1.03) : 1), horloge);
       scene.add(animal.objet);
       animaux.push(animal);
     }
@@ -117,9 +117,11 @@ export function creerSpawner(scene, camera, horloge, { surEntree } = {}) {
     animaux.splice(indice, 1);
   }
 
-  // Peuplement initial : quand on entre, le bassin n'est jamais vide
+  // Peuplement initial : quand on entre, le bassin n'est jamais vide.
+  // Dev : ?forcer=meduse fait entrer cette espèce d'emblée, quelle que soit l'heure.
+  const forcee = ESPECES.find((e) => e.id === new URLSearchParams(location.search).get('forcer'));
   for (let i = 0; i < 2; i++) {
-    const espece = tirer();
+    const espece = forcee ?? tirer();
     if (espece) faireEntrer(espece, THREE.MathUtils.randFloat(0.2, 0.6));
   }
 

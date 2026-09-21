@@ -108,12 +108,12 @@ Les gros passent loin et lentement ; les petits, près et vite.
 | id | Nom | Rareté | Taille | Heures | Rig Blender | Notes |
 |---|---|---|---|---|---|---|
 | `sardine` | Sardine (banc) | commun | 0,2 m | jour | colonne 3-4 os | **1 seul modèle**, instancié ×150 en banc (boids simplifié) |
-| `chirurgien` | Poisson-chirurgien bleu | commun | 0,3 m | jour | colonne 3-4 os | passe en petit groupe de 3-5 |
-| `requin-recif` | Requin gris de récif | peu commun | 1,8 m | toutes | colonne 6-8 os | **PREMIER MODÈLE À FAIRE** (rig le plus simple) |
-| `tortue` | Tortue verte | peu commun | 1,2 m | jour | 4 nageoires + cou | lente, majestueuse |
-| `meduse` | Méduse lune | peu commun (commun la nuit) | 0,4 m | toutes, luit la nuit | shape keys (pulsation) | matériau translucide + émissif la nuit |
+| `chirurgien` | Poisson-chirurgien bleu | commun | 0,3 m | aube-jour | ✅ colonne 4 os | ×4 |
+| `requin-recif` | Requin gris de récif | peu commun | 1,8 m | toutes | ✅ colonne 5 os | premier modèle (2026-09-21) |
+| `tortue` | Tortue verte | peu commun | 1,2 m | aube-jour-crépuscule | ✅ 4 nageoires + cou + queue (`animer_os`) | lente, majestueuse |
+| `meduse` | Méduse lune | peu commun | 0,4 m | toutes, luit la nuit | ✅ échelle d'os (pulsation) + bras | translucide + émissif la nuit, ×2 |
 | `manta` | Raie manta | rare | 5 m (envergure) | jour | 2 chaînes d'os (ailes) | passe près, remplit l'écran |
-| `marteau` | Requin-marteau | rare | 3,5 m | crépuscule + nuit | colonne 6-8 os | |
+| `requin-marteau` | Requin-marteau halicorne | rare | 3,2 m | crépuscule + nuit | ✅ colonne 5 os | tête en T |
 | `requin-baleine` | Requin-baleine | légendaire | 10 m | toutes | colonne 8-10 os | très lent, très loin, puis très près |
 
 ### v2 — candidats (quand la v1 tourne)
@@ -241,7 +241,14 @@ Debug : `?heure=23` fige l'heure, `?tempo=600` fait défiler une journée en 2 m
 - `outils/visionneuse.html?modele=<id>&vue=cote|face|dessus|trois-quarts&ambiance=atelier|bassin` —
   contrôle visuel (grille 1 m, axes : le museau doit pointer vers le bleu = +Z), animation jouée, infos à l'écran.
 - Leçon : **sans crease, la subdivision de surface fond les nageoires en boudins**. `nageoire()` plie le contour.
-- Fait : `requin-recif` (253 Ko, 7 292 triangles, 5 os, `swim` 2 s).
+- Faits : `requin-recif`, `chirurgien`, `requin-marteau` (colonne d'os, nage codée par `animer_nage`),
+  `tortue` (squelette libre : cou, tête, 4 nageoires, queue ; nage par `animer_os` : battement + balayage en
+  quadrature), `meduse` (cloche animée par ÉCHELLE d'os, bras sans héritage d'échelle, matériau translucide
+  `alpha=0.45` double face, `emission` dans le catalogue → luit la nuit via `facteurNuit()` dans `animal.js`).
+- **Leçons Blender (2026-09-21)** : (1) créer les couches de données (`nouveau_bmesh()`) AVANT toute géométrie —
+  en ajouter une après invalide les références aux sommets et l'ordre n'est plus fiable ; (2) ne jamais
+  peser par plages d'indices : on **étiquette** les sommets à la création (`marquer()`, couche entière « partie »)
+  et `peser_par_parties()` lit l'étiquette dans le maillage final ; (3) `bm.verts[i]` exige `ensure_lookup_table()`.
 
 ### 7.1 Unités et échelle
 - **1 unité Blender = 1 mètre.** Modélise à la vraie taille (requin 1,8 m, sardine 0,2 m).
@@ -373,7 +380,9 @@ protocole DevTools : la page vit, on attend, on capture, et la console de la pag
 - `outils/chrome.mjs` — la bibliothèque commune (`piloter()` : naviguer, evaluer, souris, capturer).
 - `outils/visionneuse.html?modele=<id>` — contrôle d'un modèle (voir §7.0).
 - Modes d'URL du site : `?direct` (sans écran d'entrée), `?heure=23` / `?tempo=600` (horloge),
-  `?demo=observer` (valide un animal toutes les 2,5 s + ligne de debug en haut à gauche).
+  `?demo=observer` (valide un animal toutes les 2,5 s + ligne de debug en haut à gauche),
+  `?forcer=meduse` (cette espèce entre d'emblée, quelle que soit l'heure).
+- Visionneuse : `&temps=1.5` fige la pose à cet instant (pour comparer des phases d'animation).
 - `window.__shinka` — poignée lecture seule (camera, spawner, observation, horloge) pour les scénarios.
 
 ## 12. Questions encore ouvertes

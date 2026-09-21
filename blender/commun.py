@@ -23,6 +23,7 @@ arrive exactement là où `Object3D.lookAt()` l'attend.
 import bpy, bmesh, math, os, json, struct
 from mathutils import Vector
 
+COUCHE_PARTIE = 'partie'
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOSSIER_MODELES = os.path.join(RACINE, 'models')
 
@@ -53,6 +54,17 @@ def _activer(obj):
 
 
 # ---------------------------------------------------------------- géométrie
+def nouveau_bmesh():
+    """Crée le bmesh ET ses couches de données (étiquette « partie », plis d'arêtes)
+    AVANT toute géométrie. Ajouter une couche après coup réorganise les données
+    internes : toutes les références Python aux sommets deviennent invalides
+    (« BMesh data … has been removed ») et l'ordre des sommets n'est plus fiable."""
+    bm = bmesh.new()
+    bm.verts.layers.int.new(COUCHE_PARTIE)
+    bm.edges.layers.float.new('crease_edge')
+    return bm
+
+
 def lisser(t):
     """smoothstep : 0 → 1 avec départ et arrivée en douceur."""
     t = max(0.0, min(1.0, t))
@@ -77,7 +89,7 @@ def interpoler_profil(profil, t):
     return profil[-1][1], profil[-1][2]
 
 
-def corps_fusiforme(bm, profil, y_debut, y_fin, stations=30, segments=18, aplatir_ventre=0.88):
+def corps_fusiforme(bm, profil, y_debut, y_fin, stations=30, segments=18, aplatir_ventre=0.88, decalage=(0.0, 0.0)):
     """Un corps de poisson par « loft » : des anneaux elliptiques échelonnés le long
     de Y, une pointe à chaque bout. profil donne la demi-largeur (x) et la
     demi-hauteur (z) en fonction de t (0 = y_debut, 1 = y_fin)."""
@@ -93,11 +105,11 @@ def corps_fusiforme(bm, profil, y_debut, y_fin, stations=30, segments=18, aplati
             z = rz * math.sin(a)
             if z < 0:
                 z *= aplatir_ventre          # le ventre est un peu plus plat que le dos
-            anneau.append(bm.verts.new((x, y, z)))
+            anneau.append(bm.verts.new((x + decalage[0], y, z + decalage[1])))
         anneaux.append(anneau)
 
-    pointe_avant = bm.verts.new((0.0, y_debut, 0.0))
-    pointe_arriere = bm.verts.new((0.0, y_fin, 0.0))
+    pointe_avant = bm.verts.new((decalage[0], y_debut, decalage[1]))
+    pointe_arriere = bm.verts.new((decalage[0], y_fin, decalage[1]))
     n = segments
     for k in range(n):
         bm.faces.new((pointe_avant, anneaux[0][(k + 1) % n], anneaux[0][k]))
@@ -107,7 +119,7 @@ def corps_fusiforme(bm, profil, y_debut, y_fin, stations=30, segments=18, aplati
             bm.faces.new((A[k], B[k], B[(k + 1) % n], A[(k + 1) % n]))
     for k in range(n):
         bm.faces.new((pointe_arriere, anneaux[-1][k], anneaux[-1][(k + 1) % n]))
-    return anneaux
+    return [pointe_avant, pointe_arriere] + [v for anneau in anneaux for v in anneau]
 
 
 def nageoire(bm, points, epaisseur, pli=1.0):
@@ -126,10 +138,23 @@ def nageoire(bm, points, epaisseur, pli=1.0):
     for i in range(m):
         j = (i + 1) % m
         bm.faces.new((dessus[i], dessus[j], dessous[j], dessous[i]))
-    couche_pli = bm.edges.layers.float.get('crease_edge') or bm.edges.layers.float.new('crease_edge')
+    couche_pli = bm.edges.layers.float.get('crease_edge')   # créée par nouveau_bmesh()
     for face in (face_dessus, face_dessous):
         for e in face.edges:
             e[couche_pli] = pli
+    return dessus + dessous
+
+
+def ellipsoide(bm, centre, rayons, segments=24, anneaux=16, aplatir_dessous=1.0):
+    """Une sphère étirée (rayons = (rx, ry, rz)), le dessous éventuellement aplati
+    (carapace, cloche de méduse…). Renvoie ses sommets."""
+    res = bmesh.ops.create_uvsphere(bm, u_segments=segments, v_segments=anneaux, radius=1.0)
+    for v in res['verts']:
+        x, y, z = v.co.x * rayons[0], v.co.y * rayons[1], v.co.z * rayons[2]
+        if z < 0:
+            z *= aplatir_dessous
+        v.co = (centre[0] + x, centre[1] + y, centre[2] + z)
+    return res['verts']
 
 
 def sphere(bm, centre, rayon, segments=12, anneaux=8):
@@ -141,7 +166,9 @@ def sphere(bm, centre, rayon, segments=12, anneaux=8):
 
 
 def terminer_maillage(bm, nom):
-    """bmesh → objet Blender lissé, ajouté à la scène."""
+    """bmesh → objet Blender lissé, ajouté à la scène. L'ordre des sommets est
+    conservé : les indices relevés pendant la construction restent valables."""
+    bm.verts.index_update()
     bmesh.ops.triangulate(bm, faces=[f for f in bm.faces if len(f.verts) > 4])   # n-gones concaves → triangles
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     me = bpy.data.meshes.new(nom)
@@ -179,9 +206,10 @@ def colorer_ventre_dos(obj, dos, ventre, z_bas=-0.06, z_haut=0.08, retouche=None
     return attr
 
 
-def materiau_peau(nom, rugosite=0.55):
+def materiau_peau(nom, rugosite=0.55, alpha=1.0):
     """Principled BSDF dont la couleur de base vient de l'attribut « Col ».
-    Seul le Principled s'exporte en glTF (DESIGN.md §7.4)."""
+    Seul le Principled s'exporte en glTF (DESIGN.md §7.4).
+    alpha < 1 : matière translucide (méduse), rendue des deux côtés."""
     mat = bpy.data.materials.new(nom)
     mat.use_nodes = True
     arbre = mat.node_tree
@@ -190,6 +218,14 @@ def materiau_peau(nom, rugosite=0.55):
     noeud_couleur.layer_name = 'Col'
     arbre.links.new(noeud_couleur.outputs['Color'], bsdf.inputs['Base Color'])
     bsdf.inputs['Roughness'].default_value = rugosite
+    if alpha < 1.0:
+        bsdf.inputs['Alpha'].default_value = alpha
+        for attribut, valeur in (('blend_method', 'BLEND'), ('surface_render_method', 'BLENDED')):
+            try:
+                setattr(mat, attribut, valeur)      # le nom a changé selon les versions de Blender
+            except Exception:
+                pass
+        mat.use_backface_culling = False            # → glTF doubleSided : on voit l'intérieur
     return mat
 
 
@@ -209,6 +245,93 @@ def squelette_colonne(nom, os_defs):
             eb.parent = arm_data.edit_bones[parent]
     bpy.ops.object.mode_set(mode='OBJECT')
     return arm
+
+
+def squelette(nom, os_defs, sans_heritage_echelle=()):
+    """Comme squelette_colonne, mais chaque os a sa tête et sa queue en 3D :
+    os_defs = [(nom, (hx, hy, hz), (tx, ty, tz), nom_parent)].
+    sans_heritage_echelle : os qui ne doivent PAS suivre l'échelle de leur parent
+    (les bras d'une méduse dont la cloche se contracte)."""
+    arm_data = bpy.data.armatures.new(nom + '_data')
+    arm = bpy.data.objects.new(nom, arm_data)
+    bpy.context.scene.collection.objects.link(arm)
+    _activer(arm)
+    bpy.ops.object.mode_set(mode='EDIT')
+    for nom_os, tete, queue, parent in os_defs:
+        eb = arm_data.edit_bones.new(nom_os)
+        eb.head = tete
+        eb.tail = queue
+        if parent:
+            eb.parent = arm_data.edit_bones[parent]
+        if nom_os in sans_heritage_echelle:
+            eb.inherit_scale = 'NONE'
+    bpy.ops.object.mode_set(mode='OBJECT')
+    return arm
+
+
+def marquer(bm, sommets, nom_os, registre, fondu=None):
+    """Étiquette des sommets avec l'os qui les portera. L'étiquette est une couche
+    entière du bmesh : elle SUIT chaque sommet jusque dans le maillage final, quel
+    que soit l'ordre dans lequel Blender les range. registre = liste partagée
+    [(nom_os, fondu)] ; fondu = None ou ((x, y, z), rayon) : à moins de `rayon` du
+    point de jonction, le poids glisse vers l'os parent (attache souple)."""
+    couche = bm.verts.layers.int.get(COUCHE_PARTIE)          # créée par nouveau_bmesh()
+    registre.append((nom_os, fondu))
+    etiquette = len(registre)                  # 0 = pas d'étiquette
+    for v in sommets:
+        v[couche] = etiquette
+
+
+def peser_par_parties(obj, arm, os_defs, registre):
+    """Lit l'étiquette « partie » de chaque sommet et lui donne le poids de son os
+    (avec fondu vers le parent près de la jonction). Voir marquer()."""
+    me = obj.data
+    attr = me.attributes.get(COUCHE_PARTIE)
+    if attr is None:
+        raise RuntimeError("aucune étiquette « partie » : appeler marquer() pendant la construction")
+    groupes = {nom: obj.vertex_groups.new(name=nom) for nom, _, _, _ in os_defs}
+    parents = {nom: parent for nom, _, _, parent in os_defs}
+    for i, v in enumerate(me.vertices):
+        etiquette = attr.data[i].value
+        if etiquette == 0:
+            continue
+        nom_os, fondu = registre[etiquette - 1]
+        w = 1.0
+        if fondu:
+            base, rayon = fondu
+            w = max(0.0, min(1.0, (v.co - Vector(base)).length / rayon))
+        groupes[nom_os].add([i], w, 'REPLACE')
+        if w < 1.0 and parents[nom_os]:
+            groupes[parents[nom_os]].add([i], 1.0 - w, 'REPLACE')
+    me.attributes.remove(attr)                 # l'étiquette a fait son travail : pas dans le .glb
+    mod = obj.modifiers.new('Armature', 'ARMATURE')
+    mod.object = arm
+    obj.parent = arm
+
+
+def animer_os(arm, pistes, images=48, nom_action='swim', pas=2):
+    """Animation générique : pistes = {nom_os: [(canal, axe, amplitude, phase, base), …]}
+    avec canal ∈ 'rotation_euler' | 'scale' | 'location', axe ∈ 0 (X) | 1 (Y) | 2 (Z).
+    Chaque valeur = base + amplitude × sin(t + phase). Boucle propre (image 1 = image images+1)."""
+    scene = bpy.context.scene
+    scene.frame_start = 1
+    scene.frame_end = images
+    _activer(arm)
+    bpy.ops.object.mode_set(mode='POSE')
+    for pb in arm.pose.bones:
+        pb.rotation_mode = 'XYZ'
+    for f in range(1, images + 2, pas):
+        t = 2 * math.pi * (f - 1) / images
+        for nom, canaux in pistes.items():
+            pb = arm.pose.bones[nom]
+            for canal, axe, amplitude, phase, base in canaux:
+                valeur = base + amplitude * math.sin(t + phase)
+                getattr(pb, canal)[axe] = valeur
+                pb.keyframe_insert(canal, index=axe, frame=f)
+    bpy.ops.object.mode_set(mode='OBJECT')
+    action = arm.animation_data.action
+    action.name = nom_action
+    return action
 
 
 def peser_colonne(obj, arm, os_defs, recouvrement=1.5):

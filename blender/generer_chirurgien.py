@@ -28,7 +28,7 @@ PROFIL = [
     (0.92, 0.009, 0.024),
     (1.00, 0.006, 0.014),
 ]
-bm = bmesh.new()
+bm = nouveau_bmesh()
 corps_fusiforme(bm, PROFIL, Y_MUSEAU, Y_PEDONCULE, stations=24, segments=16, aplatir_ventre=1.0)
 
 # ---------------------------------------------------------------- 2) les nageoires

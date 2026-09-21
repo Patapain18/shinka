@@ -35,7 +35,7 @@ PROFIL = [
 ]
 PROFIL = [(t, rx * K, rz * K) for (t, rx, rz) in PROFIL]
 
-bm = bmesh.new()
+bm = nouveau_bmesh()
 corps_fusiforme(bm, PROFIL, Y_MUSEAU, Y_PEDONCULE, stations=36, segments=22)
 
 # ---------------------------------------------------------------- la tête en marteau
