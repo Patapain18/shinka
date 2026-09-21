@@ -24,8 +24,9 @@ Un serveur est nécessaire : les modules ES ne se chargent pas depuis `file://`.
 
 ## Paramètres d'URL utiles
 
-`?direct` (sans écran d'entrée) · `?heure=23` / `?tempo=600` (horloge) · `?forcer=meduse`
-(faire entrer une espèce) · `?evenement=banc|geant|trouble` · `?qualite=haute|basse`.
+`?direct` (sans écran d'entrée) · `?parade` (**pour tester : toutes les espèces défilent à la file, sans
+heure ni rareté, baleine comprise, événements toutes les 45-90 s**) · `?heure=23` / `?tempo=600` (horloge) ·
+`?forcer=meduse` (faire entrer une espèce) · `?evenement=banc|geant|trouble` · `?qualite=haute|basse`.
 
 ## Qualité du rendu
 

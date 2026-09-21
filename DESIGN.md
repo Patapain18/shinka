@@ -447,7 +447,8 @@ protocole DevTools : la page vit, on attend, on capture, et la console de la pag
   avec `Cache-Control: no-store`, sinon le navigateur garde de vieux modules après une mise à jour
   (« does not provide an export named … »). En cas de doute : rechargement forcé (⌘⇧R).
 - `outils/visionneuse.html?modele=<id>` — contrôle d'un modèle (voir §7.0).
-- Modes d'URL du site : `?direct` (sans écran d'entrée), `?heure=23` / `?tempo=600` (horloge),
+- Modes d'URL du site : `?direct` (sans écran d'entrée), `?parade` (toutes les espèces à la file, une toutes les 3-6 s,
+  sans heure ni rareté ni repos, baleine comprise, événements toutes les 45-90 s — pour voir tout le catalogue), `?heure=23` / `?tempo=600` (horloge),
   `?demo=observer` (valide un animal toutes les 2,5 s + ligne de debug en haut à gauche),
   `?forcer=meduse` (cette espèce entre d'emblée, quelle que soit l'heure),
   `?evenement=banc|geant|trouble` (l'événement démarre 2 s après l'entrée).

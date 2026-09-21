@@ -74,10 +74,11 @@ function redimensionnerTout() {
 /* ---------- L'heure réelle → la lumière ---------- */
 const horloge = creerHorloge({ scene, lumieres, eau, renderer });
 const hudHeure = document.getElementById('hud-heure');
+const params = new URLSearchParams(location.search);
 function majHud() {
   const h = Math.floor(horloge.heure);
   const m = Math.floor((horloge.heure - h) * 60);
-  hudHeure.textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} · ${horloge.phase}`;
+  hudHeure.textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} · ${params.has('parade') ? 'parade' : horloge.phase}`;
 }
 majHud();
 setInterval(majHud, 1000);
@@ -85,7 +86,6 @@ setInterval(majHud, 1000);
 /* ---------- Chargement des modèles, puis écran d'entrée ---------- */
 // Raccourci de développement : http://localhost:8792/?direct saute l'écran d'entrée.
 // Pratique quand on retouche la scène 50 fois de suite (et pour les captures automatiques).
-const params = new URLSearchParams(location.search);
 const direct = params.has('direct');
 const barre = document.getElementById('barre-chargement');
 

@@ -7,6 +7,9 @@
    - « pitié » : aucun rare/légendaire depuis 6 min → on force le tirage parmi eux
    - tirage pondéré : commun 60 / peu commun 25 / rare 12 / légendaire 3
    - les espèces grégaires (groupe > 1) entrent en formation lâche
+   Mode PARADE (?parade dans l'adresse, pour tester) : plus d'heure, de rareté ni de
+   repos — toutes les espèces défilent à la file, mélangées, une toutes les 3 à 6 s,
+   la baleine comprise ; l'éclairage, lui, reste celui de l'heure réelle.
    ============================================ */
 
 import * as THREE from 'three';
@@ -23,6 +26,8 @@ const MAX_ANIMAUX = 8;
 const RARE = (e) => e.rarete === 'rare' || e.rarete === 'legendaire';
 
 export function creerSpawner(scene, camera, horloge, { surEntree } = {}) {
+  const parade = new URLSearchParams(location.search).has('parade');
+  let file = [];                      // parade : les espèces qui restent à faire passer dans ce tour
   const animaux = [];
   const dernierPassage = new Map();   // id d'espèce → instant (s) de son dernier passage
   let dernierRare = 0;
@@ -71,7 +76,14 @@ export function creerSpawner(scene, camera, horloge, { surEntree } = {}) {
       maintenant - (dernierPassage.get(e.id) ?? -Infinity) >= REPOS[e.rarete]);
   }
 
+  /** Parade : chaque tour fait passer toutes les espèces une fois, dans un ordre mélangé. */
+  function defiler() {
+    if (!file.length) file = [...ESPECES].sort(() => Math.random() - 0.5);
+    return file.pop();
+  }
+
   function tirer() {
+    if (parade) return defiler();
     let liste = candidats();
     if (liste.length === 0) return null;
     if (maintenant - dernierRare > PITIE) {
@@ -128,7 +140,7 @@ export function creerSpawner(scene, camera, horloge, { surEntree } = {}) {
   // Peuplement initial : quand on entre, le bassin n'est jamais vide.
   // Dev : ?forcer=meduse fait entrer cette espèce d'emblée, quelle que soit l'heure.
   const forcee = ESPECES.find((e) => e.id === new URLSearchParams(location.search).get('forcer'));
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < (parade ? 3 : 2); i++) {
     const espece = forcee ?? tirer();
     // forcée : en pleine vitre (0,4 et 0,6), pour qu'une capture la voie à coup sûr
     if (espece) faireEntrer(espece, forcee ? 0.4 + 0.2 * i : THREE.MathUtils.randFloat(0.2, 0.6));
@@ -144,8 +156,8 @@ export function creerSpawner(scene, camera, horloge, { surEntree } = {}) {
       maintenant += dt;
       compteur -= dt;
       if (compteur <= 0) {
-        compteur = THREE.MathUtils.randFloat(4, 9);
-        if (animaux.length < MAX_ANIMAUX) {
+        compteur = parade ? THREE.MathUtils.randFloat(3, 6) : THREE.MathUtils.randFloat(4, 9);
+        if (animaux.length < (parade ? MAX_ANIMAUX + 4 : MAX_ANIMAUX)) {
           const espece = tirer();
           if (espece) faireEntrer(espece);
         }

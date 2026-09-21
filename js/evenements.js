@@ -12,7 +12,9 @@ import * as THREE from 'three';
 import { ESPECES } from './species.js';
 import { Banc } from './banc.js';
 
-const INTERVALLE = [12 * 60, 25 * 60];   // secondes entre deux événements
+const INTERVALLE = new URLSearchParams(location.search).has('parade')
+  ? [45, 90]                             // parade (tests) : un événement toutes les 45 à 90 s
+  : [12 * 60, 25 * 60];                  // secondes entre deux événements
 
 export function creerEvenements({ camera, horloge, eau, audio, spawner }) {
   const force = new URLSearchParams(location.search).get('evenement');
