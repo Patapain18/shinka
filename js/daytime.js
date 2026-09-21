@@ -78,6 +78,7 @@ export function creerHorloge({ scene, lumieres, eau, renderer }) {
     lumieres.ambiance.intensity = entre('ambiance');
     eau.regler({ rayons: entre('rayons') * modulation.rayons, caustiques: entre('caustiques') });
     renderer.toneMappingExposure = entre('exposition');
+    scene.environmentIntensity = 0.5 * entre('ambiance') / JOUR.ambiance;   // les reflets suivent la lumière du jour
   }
   appliquer();
 

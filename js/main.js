@@ -16,7 +16,7 @@
    ============================================ */
 
 import * as THREE from 'three';
-import { creerRenderer, scene, camera, pointRegarde, redimensionner, BASSIN, lumieres } from './scene.js';
+import { creerRenderer, creerEnvironnement, scene, camera, pointRegarde, redimensionner, BASSIN, lumieres } from './scene.js';
 import { creerEau } from './water.js';
 import { ESPECES } from './species.js';
 import { chargerModeles } from './modeles.js';
@@ -61,7 +61,9 @@ canvas.addEventListener('webglcontextlost', () => { bandeauContexte.hidden = fal
 canvas.addEventListener('webglcontextrestored', () => { bandeauContexte.hidden = true; });   // Three a tout recréé : la boucle repart seule
 document.getElementById('contexte-recharger').addEventListener('click', () => location.reload());
 
-/* ---------- L'eau : sol, rayons, particules ---------- */
+/* ---------- L'environnement (reflets) puis l'eau : sol, rayons, particules ---------- */
+scene.environment = creerEnvironnement(renderer);
+scene.environmentIntensity = 0.5;            // l'horloge le module ensuite (daytime.js)
 const eau = creerEau(scene, camera);
 
 /* ---------- Post-processing (bloom, vitre) ---------- */

@@ -99,6 +99,41 @@ for (const [x, z, rayon] of ROCHERS) {
 }
 
 /* ---------- 6) Redimensionnement de la fenêtre ---------- */
+/* ---------- L'environnement : ce que la peau reflète ---------- */
+// Un matériau « standard » reflète son environnement : sans carte d'environnement, un
+// métal (l'argent des sardines) ne reflète RIEN et devient noir dans l'eau sombre.
+// On fabrique donc une carte minimale : une sphère vue de l'intérieur, claire vers le
+// haut (la surface), sombre vers le bas, passée au PMREM (les flous pré-calculés par
+// rugosité). Toute peau mouillée y gagne un reflet doux sur le dos.
+export function creerEnvironnement(renderer) {
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const monde = new THREE.Scene();
+  const geometrie = new THREE.SphereGeometry(50, 32, 16);
+  const materiau = new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    uniforms: {
+      haut:   { value: new THREE.Color(0x8fc4e6) },      // la surface, lumineuse
+      milieu: { value: new THREE.Color(0x0e3c5c) },      // l'horizon sous-marin
+      bas:    { value: new THREE.Color(0x02070c) },      // le fond
+    },
+    vertexShader: /* glsl */`
+      varying vec3 vPos;
+      void main() { vPos = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */`
+      uniform vec3 haut, milieu, bas;
+      varying vec3 vPos;
+      void main() {
+        float y = normalize(vPos).y;
+        vec3 c = y > 0.0 ? mix(milieu, haut, pow(y, 1.4)) : mix(milieu, bas, pow(-y, 0.8));
+        gl_FragColor = vec4(c, 1.0);
+      }`,
+  });
+  monde.add(new THREE.Mesh(geometrie, materiau));
+  const environnement = pmrem.fromScene(monde, 0.04).texture;
+  pmrem.dispose(); geometrie.dispose(); materiau.dispose();
+  return environnement;
+}
+
 export function redimensionner(renderer) {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();     // obligatoire après avoir touché aspect ou fov
