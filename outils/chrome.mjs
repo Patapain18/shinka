@@ -61,6 +61,15 @@ export async function piloter({ largeur = 1440, hauteur = 900 } = {}) {
       if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? 'erreur dans la page');
       return r.result.value;
     },
+    /** Sonde la page toutes les 250 ms jusqu'à ce que l'expression soit vraie (ou que le délai expire). */
+    async attendre(expression, delai = 30000) {
+      const debut = Date.now();
+      while (Date.now() - debut < delai) {
+        try { if (await this.evaluer(expression)) return true; } catch { /* la page charge encore */ }
+        await dormir(250);
+      }
+      throw new Error(`attente dépassée (${delai} ms) : ${expression}`);
+    },
     async souris(x, y) { await envoyer('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y }); },
     async capturer(sortie) {
       const { data } = await envoyer('Page.captureScreenshot', { format: 'png' });

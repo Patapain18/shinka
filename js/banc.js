@@ -15,6 +15,7 @@
 import * as THREE from 'three';
 import { brut } from './modeles.js';
 import { creerLumiere } from './lumiere.js';
+import { appliquerCaustiques } from './caustiques.js';
 
 const _fantome = new THREE.Object3D();   // sert à calculer chaque matrice d'instance
 const _p = new THREE.Vector3();
@@ -62,9 +63,11 @@ export class Banc {
           transformed.x += amp * sin(uTemps * 15.7 * aFreq + aPhase - q * 7.9);`);
     };
     materiau.customProgramCacheKey = () => 'banc';   // ce shader modifié a droit à son propre programme
+    appliquerCaustiques(materiau, 0.9);              // …et reçoit aussi les caustiques (les greffes s'enchaînent)
 
     this.maillage = new THREE.InstancedMesh(geometrie, materiau, nombre);
     this.maillage.frustumCulled = false;   // la boîte englobante ne suit pas les instances : on ne la laisse pas décider
+    this.maillage.castShadow = true;       // un banc projette un nuage d'ombres sur le sable
     this.objet = new THREE.Group();        // objet.position = le centre du banc (c'est lui que vise l'observation)
     this.objet.add(this.maillage);
     this.materiaux = [materiau];

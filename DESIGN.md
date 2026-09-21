@@ -358,35 +358,49 @@ via un filtre CSS, et pour la fiche débloquée.
 
 ---
 
-## 8. Ambiance : lumière, eau, vitre
+## 8. Ambiance : lumière, eau, vitre (v2, 2026-09-21)
 
-- **Lumière** : une `DirectionalLight` (le soleil filtré par la surface) + une `HemisphereLight`
-  bleu/noir très faible + un `fog` exponentiel. C'est le brouillard qui fait la profondeur.
-- **Rayons de lumière** : quelques plans transparents verticaux, texture dégradée additive,
-  légèrement inclinés, qui oscillent lentement. Bon marché, très efficace.
-- **Caustiques** : texture animée projetée sur le sol et le dos des animaux proches (une `light map` qui défile).
-- **Particules** : 2 000 points en suspension (« neige marine ») qui dérivent, + bulles occasionnelles.
-- **Vitre** : vignette, très léger reflet spéculaire en haut, distorsion minime aux bords,
-  grain de film (comme `lusion_clone`).
-- **Post-processing** (`rendu.js`) : `EffectComposer` → `RenderPass` → `UnrealBloomPass` (0,28, seuil 0,85) → passe « vitre »
-  (aberration chromatique aux bords, reflet oblique qui glisse avec la parallaxe, vignette, grain) → `OutputPass`
-  (tone mapping + sRGB : le renderer ne les applique plus quand il dessine dans une image intermédiaire).
-  Coupé en qualité basse (`qualite.js`) : rendu direct, pixel ratio 1, moitié de la neige marine.
-  Qui décide du niveau, par priorité : `?qualite=` (fige, efface le choix mémorisé) → le bouton « qualité » du HUD
-  (choix du visiteur, mémorisé) → l'auto (haute au départ ; si la **médiane** des durées de frame passe sous 36 fps
-  après 5 s, basse **pour cette visite seulement** — jamais mémorisé : une machine encombrée un soir n'est pas lente).
-- **Leçon apprise (étape 2)** : dans un `ShaderMaterial` avec `fog: true`, il FAUT les uniforms `UniformsLib.fog` (sinon Three plante au rendu),
-  et l'ordre en fin de fragment est `tonemapping → colorspace → fog` (Three fournit `fogColor` déjà en sRGB).
-- **Perf** : `pixelRatio` ≤ 1,5 ; max 12 animaux ; bancs en `InstancedMesh` ; modèles chargés à la
-  première apparition puis mis en cache ; option « qualité » (bloom off) si ça rame.
-- **Robustesse (site laissé ouvert des heures)** : chaque objet retiré libère ce qu'il possède en propre —
-  `Animal.detruire()` : `skeleton.dispose()` (la texture d'os créée par copie ; sans ça, une texture GPU par animal
-  passé restait allouée à jamais) ; `Banc.detruire()` : `geometry.dispose()` + `InstancedMesh.dispose()` (tampon des
-  matrices d'instances). **Jamais** `material.dispose()` sur une copie de matériau : elle ne possède rien sur le GPU,
-  et ça détruirait le programme de shader partagé (recompilé au prochain animal = saccade).
-  Contexte WebGL perdu (veille, pilote) : Three cesse de dessiner et demande la restauration ; `main.js` affiche le
-  bandeau `#contexte-perdu` (bouton Recharger) et le cache au `webglcontextrestored`.
-  Test : `node outils/test-robustesse.mjs sortie.png`.
+Le décor est fait de modules qui ne savent rien des animaux, orchestrés par `main.js` :
+
+- **`scene.js`** — renderer (ombres PCFSoft activées), scène, brouillard `FogExp2` (couleur = fond), caméra,
+  soleil directionnel **qui porte les ombres** (caméra d'ombre orthographique 60 × 60 m, carte 2048², biais
+  −0,0004 / normalBias 0,05), hémisphère, et `creerEnvironnement()` : une carte d'environnement minimale (sphère
+  vue de l'intérieur, claire vers la surface, sombre vers le fond, PMREM) — sans elle, un métal (l'argent des
+  sardines) ne reflète rien et devient noir.
+- **`caustiques.js`** — UNE fonction GLSL (deux couches de Voronoï dont on éclaire les frontières, affûtées,
+  dispersion chromatique, modulation par plaques) et un hook `appliquerCaustiques(materiau, force)` qui la greffe
+  dans n'importe quel `MeshStandardMaterial` par `onBeforeCompile` : la lumière s'ajoute sur les faces tournées
+  vers le haut, PAS dans l'ombre portée (on relit `getShadow` du soleil), et s'efface au loin (moiré). Compatible
+  instancing (le banc). Uniforms partagés (`uTemps`, intensité modulée par l'heure).
+- **`sable.js`** — le sol : un plan déplacé une fois par du bruit JS (`bruit.js` : les DUNES), normales calculées ;
+  matériau standard greffé : RIDES de sable en relief (normale perturbée, phase bruitée, longueur d'onde variable),
+  grain, taches, débris ronds et rares, assombrissement au pied des rochers (uniform `uRochers`), caustiques ;
+  reçoit les ombres. `hauteurSable(x, z)` sert à poser rochers et cailloux.
+- **`rochers.js`** — icosaèdres soudés (`mergeVertices`, sinon facettes) déplacés par deux bruits, dessous écrasé ;
+  matière tri-planaire par la position dans le monde : basalte/brun, grain, fissures, ALGUES vert-olive sur le dessus,
+  plaques roses d'algues corallines, relief par gradient de bruit, rugosité plus faible sur les algues ; ombres
+  portées et reçues ; caustiques. + 90 CAILLOUX instanciés (`InstancedMesh`) au premier plan, jamais sur un rocher.
+- **`surface.js`** — le plafond d'eau vu d'en dessous (plan à 7,5 m, `BackSide`) : FENÊTRE DE SNELL (transmission du
+  ciel sous incidence raide, miroir sombre au-delà de l'angle critique), vaguelettes (quatre trains d'ondes avec la
+  relation de dispersion + bruit), éclats du soleil, brouillard ; son intensité suit celle des rayons (heure).
+- **`water.js`** — rayons (plans additifs qui naissent JUSTE sous la surface et s'y fondent — sinon on voit leur bord
+  en levant les yeux), neige marine (2 500 points ; **sillage** : les particules proches d'un animal en mouvement
+  sont écartées et entraînées, puis freinées), bulles ; `eau.regler({rayons, caustiques, neige, densiteNeige})`.
+- **Interactions** : les animaux PORTENT une ombre (sable, rochers, eux-mêmes) et REÇOIVENT les caustiques sur le
+  dos (`animal.js`, `banc.js` : hook enchaîné après le shader de nage) ; la neige tourbillonne à leur passage ;
+  l'environnement se reflète sur leur peau mouillée.
+- **`daytime.js`** — l'heure module soleil (couleur, intensité, intensité de l'OMBRE : plus molle la nuit), hémisphère,
+  brume, exposition, caustiques, rayons, surface, reflets (`environmentIntensity`).
+- **`rendu.js`** — post-processing : bloom léger (0,28 / seuil 0,85), passe « vitre » (aberration aux bords, reflet
+  oblique lié à la parallaxe, vignette, grain), `OutputPass`. Coupé en qualité basse, avec les ombres (`qualite.js`).
+- **Contrôle** : `?camera=x,y,z,cx,cy,cz` fige une caméra de contrôle (position, point visé) pour les captures du
+  décor, en désactivant la parallaxe.
+- **Leçon (v1, toujours vraie)** : dans un `ShaderMaterial` avec `fog: true`, il FAUT les uniforms `UniformsLib.fog` et
+  l'ordre en fin de fragment est `tonemapping → colorspace → fog` (la surface et les rayons le suivent).
+- **Leçons** : `IcosahedronGeometry` est non indexée → `mergeVertices()` avant `computeVertexNormals()`, sinon des
+  facettes ; dans un hook `onBeforeCompile`, la position monde d'une instance passe par `instanceMatrix` ; un plan
+  additif qui traverse la surface montre son bord → le fondre ; une surface trop contrastée (fenêtre de Snell
+  étroite, vagues raides) fait des taches : transition large et pentes faibles.
 
 ---
 

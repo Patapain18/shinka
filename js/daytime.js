@@ -51,7 +51,7 @@ function heureReelle() {
   return d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
 }
 
-export function creerHorloge({ scene, lumieres, eau, renderer }) {
+export function creerHorloge({ scene, lumieres, eau, renderer, surface = null }) {
   const params = new URLSearchParams(location.search);
   const heureForcee = params.has('heure') ? parseFloat(params.get('heure')) : null;
   const tempo = parseFloat(params.get('tempo') || '1');
@@ -75,10 +75,12 @@ export function creerHorloge({ scene, lumieres, eau, renderer }) {
     scene.background.copy(brume);                 // fond ET brouillard : même couleur, sinon on voit la couture
     lumieres.soleil.color.lerpColors(a.soleil, b.soleil, t);
     lumieres.soleil.intensity = entre('intensiteSoleil') * modulation.soleil;
+    lumieres.soleil.shadow.intensity = 0.55 + 0.45 * (entre('intensiteSoleil') / JOUR.intensiteSoleil);   // ombres plus molles la nuit
     lumieres.ambiance.intensity = entre('ambiance');
     eau.regler({ rayons: entre('rayons') * modulation.rayons, caustiques: entre('caustiques') });
     renderer.toneMappingExposure = entre('exposition');
     scene.environmentIntensity = 0.5 * entre('ambiance') / JOUR.ambiance;   // les reflets suivent la lumière du jour
+    surface?.()?.regler(entre('rayons') * modulation.rayons);                // la surface s'éteint avec les rayons
   }
   appliquer();
 

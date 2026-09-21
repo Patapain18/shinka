@@ -37,6 +37,9 @@ export function creerRenderer(canvas) {
   // les futurs rayons de lumière pourront « brûler » sans virer au blanc plat.
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
+  // Les ombres portées : une carte d'ombre par lumière (ici, le soleil). PCFSoft = bords doux.
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   return renderer;
 }
 
@@ -64,8 +67,17 @@ camera.lookAt(pointRegarde);
 /* ---------- 4) Lumières ---------- */
 // Le soleil filtré par 6 m d'eau : bleuté, vient d'en haut, un peu de face.
 const soleil = new THREE.DirectionalLight(0x9fd4ff, 2.6);
-soleil.position.set(2, 14, -6);
-scene.add(soleil);
+// La direction : d'en haut, un peu de face (les animaux sont légèrement en contre-jour).
+// La cible est au milieu du bassin visible ; la caméra d'ombre (orthographique, alignée
+// sur la lumière) couvre 60 m × 60 m : 3 cm par texel de la carte 2048².
+soleil.target.position.set(0, BASSIN.sol, -16);
+soleil.position.set(4, BASSIN.sol + 28, -28);
+soleil.castShadow = true;
+soleil.shadow.mapSize.set(2048, 2048);
+Object.assign(soleil.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 70 });
+soleil.shadow.bias = -0.0004;
+soleil.shadow.normalBias = 0.05;
+scene.add(soleil, soleil.target);
 
 // Lumière d'ambiance à deux couleurs : « ciel » (bleu sombre) en haut, « sol » (noir) en bas.
 // Sans elle, tout ce qui n'est pas face au soleil serait d'un noir absolu.
@@ -75,28 +87,7 @@ scene.add(ambiance);
 // Exportées pour daytime.js, qui les fait varier avec l'heure
 export const lumieres = { soleil, ambiance };
 
-/* ---------- 5) Des rochers, pour donner des repères de profondeur ---------- */
-// Sans objets étagés en distance, le brouillard n'a rien à révéler.
-// IcosahedronGeometry(rayon, 1) : une boule à 80 facettes, parfaite en rocher low-poly.
-const materiauRoche = new THREE.MeshStandardMaterial({
-  color: 0x14242e,
-  roughness: 0.95,
-  flatShading: true,             // garde les facettes visibles au lieu de les lisser
-});
-
-const ROCHERS = [
-  // [x, z, rayon] — étagés de 8 m à 35 m pour « lire » la profondeur
-  [-7,  -8, 1.1], [ 9, -11, 1.6], [-14, -16, 2.2], [ 4, -19, 1.3],
-  [15, -24, 2.8], [-6, -27, 1.9], [ 22, -32, 3.5], [-20, -35, 3.0],
-];
-
-for (const [x, z, rayon] of ROCHERS) {
-  const rocher = new THREE.Mesh(new THREE.IcosahedronGeometry(rayon, 1), materiauRoche);
-  rocher.scale.set(1, 0.6 + Math.random() * 0.3, 1);          // un peu écrasé
-  rocher.position.set(x, BASSIN.sol + rayon * 0.45, z);        // enfoncé dans le sable
-  rocher.rotation.set(Math.random(), Math.random() * Math.PI, Math.random());
-  scene.add(rocher);
-}
+/* ---------- 5) Les rochers : voir rochers.js (ils se posent sur les dunes du sable) ---------- */
 
 /* ---------- 6) Redimensionnement de la fenêtre ---------- */
 /* ---------- L'environnement : ce que la peau reflète ---------- */

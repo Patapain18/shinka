@@ -26,7 +26,7 @@ const FENETRE = 240;   // frames gardées pour la mesure (4 s à 60 fps)
 const DELAI = 5;       // s de vie minimum avant de juger (le temps que tout se mette en place)
 const CADENCE = 60;    // on ne trie la fenêtre (pour la médiane) qu'une frame sur 60
 
-export function creerQualite({ rendu, renderer, eau, redimensionner, reglages, sauverReglages, bouton, surBascule }) {
+export function creerQualite({ rendu, renderer, scene, eau, redimensionner, reglages, sauverReglages, bouton, surBascule }) {
   const params = new URLSearchParams(location.search);
   const forcee = params.get('qualite');
   if (forcee) sauverReglages({ qualite: 'auto' });                       // un ?qualite= efface le choix mémorisé
@@ -44,6 +44,11 @@ export function creerQualite({ rendu, renderer, eau, redimensionner, reglages, s
   function appliquer() {
     const haute = niveau === 'haute';
     rendu.activer(haute);
+    if (renderer.shadowMap.enabled !== haute) {            // les ombres portées coûtent une passe de rendu
+      renderer.shadowMap.enabled = haute;
+      renderer.shadowMap.needsUpdate = true;
+      scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; });   // les shaders doivent être recompilés
+    }
     renderer.setPixelRatio(haute ? Math.min(window.devicePixelRatio, 1.5) : 1);
     redimensionner();
     eau.regler({ densiteNeige: haute ? 1 : 0.5 });

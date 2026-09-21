@@ -16,6 +16,7 @@
 import * as THREE from 'three';
 import { instancier } from './modeles.js';
 import { creerLumiere } from './lumiere.js';
+import { appliquerCaustiques } from './caustiques.js';
 
 const _cible = new THREE.Vector3();   // vecteur de travail, réutilisé (pas d'allocation à chaque frame)
 const _tangente = new THREE.Vector3();
@@ -43,7 +44,13 @@ export class Animal {
     // Pour faire briller CE requin sans allumer les autres, chacun reçoit sa copie.
     this.materiaux = [];
     this.objet.traverse((o) => {
-      if (o.isMesh) { o.material = o.material.clone(); this.materiaux.push(o.material); }
+      if (o.isMesh) {
+        o.material = o.material.clone();
+        appliquerCaustiques(o.material, 0.9);   // la lumière de la surface danse sur son dos
+        o.castShadow = true;                    // il porte une ombre sur le sable et les rochers…
+        o.receiveShadow = true;                 // …et sur lui-même (sa nageoire sur son flanc)
+        this.materiaux.push(o.material);
+      }
     });
     this.observe = false;      // validé pendant ce passage ?
     this.lumiere = creerLumiere(this.materiaux, espece.emission, horloge);   // halo + lueur nocturne

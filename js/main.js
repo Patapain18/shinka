@@ -18,6 +18,8 @@
 import * as THREE from 'three';
 import { creerRenderer, creerEnvironnement, scene, camera, pointRegarde, redimensionner, BASSIN, lumieres } from './scene.js';
 import { creerEau } from './water.js';
+import { creerRochers } from './rochers.js';
+import { creerSurface } from './surface.js';
 import { ESPECES } from './species.js';
 import { chargerModeles } from './modeles.js';
 import { creerSpawner } from './spawner.js';
@@ -64,7 +66,9 @@ document.getElementById('contexte-recharger').addEventListener('click', () => lo
 /* ---------- L'environnement (reflets) puis l'eau : sol, rayons, particules ---------- */
 scene.environment = creerEnvironnement(renderer);
 scene.environmentIntensity = 0.5;            // l'horloge le module ensuite (daytime.js)
-const eau = creerEau(scene, camera);
+const rochers = creerRochers(scene);
+const eau = creerEau(scene, camera, rochers);
+const surface = creerSurface(scene, lumieres.soleil);   // le plafond d'eau, vu d'en dessous
 
 /* ---------- Post-processing (bloom, vitre) ---------- */
 const rendu = creerRendu(renderer, scene, camera);
@@ -74,7 +78,7 @@ function redimensionnerTout() {
 }
 
 /* ---------- L'heure réelle → la lumière ---------- */
-const horloge = creerHorloge({ scene, lumieres, eau, renderer });
+const horloge = creerHorloge({ scene, lumieres, eau, renderer, surface: () => surface });
 const hudHeure = document.getElementById('hud-heure');
 const params = new URLSearchParams(location.search);
 function majHud() {
@@ -100,7 +104,7 @@ ui.majCompteur(nombreObservees(), ESPECES.length);
 
 /* ---------- Qualité : haute / basse — l'URL, le visiteur (bouton du HUD), sinon l'auto ---------- */
 const qualite = creerQualite({
-  rendu, renderer, eau, redimensionner: redimensionnerTout,
+  rendu, renderer, scene, eau, redimensionner: redimensionnerTout,
   reglages: reglages(), sauverReglages,
   bouton: document.getElementById('hud-qualite'),
   // L'auto vient de descendre : on le dit (si on est entré : avant, l'écran d'entrée cache tout)
@@ -177,11 +181,22 @@ window.addEventListener('pointermove', (e) => {
   souris.y = -(e.clientY / window.innerHeight) * 2 + 1;   // à l'écran y descend, en 3D y monte
 });
 
+// Caméra de contrôle (captures du décor) : ?camera=x,y,z,cx,cy,cz — position puis point visé.
+// Elle fige la parallaxe : on regarde exactement ce qu'on a demandé.
+const cameraLibre = params.has('camera');
+if (cameraLibre) {
+  const [x, y, z, cx, cy, cz] = params.get('camera').split(',').map(Number);
+  camera.position.set(x, y, z);
+  pointRegarde.set(cx, cy, cz);
+  camera.lookAt(pointRegarde);
+}
+
 const AMPLITUDE_X = 0.15;   // 15 cm de déplacement latéral max
 const AMPLITUDE_Y = 0.08;   //  8 cm en hauteur
 const SOUPLESSE   = 3;      // plus grand = la caméra rattrape la souris plus vite
 
 function majParallaxe(dt) {
+  if (cameraLibre) return;
   // Cible : là où la caméra DEVRAIT être d'après la souris
   const cibleX = souris.x * AMPLITUDE_X;
   const cibleY = BASSIN.hauteurYeux + souris.y * AMPLITUDE_Y;
@@ -222,7 +237,7 @@ function demo(temps) {
 }
 
 /* ---------- Poignée pour les outils de test (outils/*.mjs) ---------- */
-window.__shinka = { renderer, scene, camera, especes: ESPECES, get spawner() { return spawner; }, observation, horloge, carnet, audio, evenements, qualite, rendu };
+window.__shinka = { renderer, scene, camera, especes: ESPECES, get spawner() { return spawner; }, observation, horloge, carnet, audio, evenements, qualite, rendu, eau, surface, lumieres };
 
 /* ---------- Boucle ---------- */
 const chrono = new THREE.Clock();   // le chronomètre de la boucle (l'horloge du jour, c'est `horloge`)
@@ -237,7 +252,8 @@ function boucle() {
 
   majParallaxe(dt);
   horloge.maj(dt);
-  eau.maj(dt, temps);
+  eau.maj(dt, temps, spawner ? spawner.animaux : []);
+  surface.maj(temps);
   spawner?.maj(dt);               // « ?. » : ne fait rien tant que spawner vaut null
   evenements.maj(dt);
   observation.maj(dt);

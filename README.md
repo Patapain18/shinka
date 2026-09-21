@@ -26,7 +26,8 @@ Un serveur est nécessaire : les modules ES ne se chargent pas depuis `file://`.
 
 `?direct` (sans écran d'entrée) · `?parade` (**pour tester : toutes les espèces défilent à la file, sans
 heure ni rareté, baleine comprise, événements toutes les 45-90 s**) · `?heure=23` / `?tempo=600` (horloge) ·
-`?forcer=meduse` (faire entrer une espèce) · `?evenement=banc|geant|trouble` · `?qualite=haute|basse`.
+`?forcer=meduse` (faire entrer une espèce) · `?evenement=banc|geant|trouble` · `?qualite=haute|basse` ·
+`?camera=x,y,z,cx,cy,cz` (caméra de contrôle du décor, parallaxe figée).
 
 ## Qualité du rendu
 

@@ -16,7 +16,8 @@ const LIRE = `(() => { const a = window.__shinka.spawner.animaux.find((x) => x.e
                tempo: a.mixer.timeScale, roulis: a.roulis, chrono: a.chrono } : null; })()`;
 try {
   await chrome.naviguer('http://localhost:8792/?direct&heure=13&forcer=requin-recif&qualite=basse');
-  await dormir(4000);
+  await chrome.attendre(`window.__shinka && window.__shinka.spawner && window.__shinka.spawner.animaux.length > 0`);
+  await dormir(1500);
   const e0 = await chrome.evaluer(LIRE);
   verifier('un requin gris avec ses deux actions', e0 && e0.plane !== null, JSON.stringify(e0));
   await chrome.evaluer(`(window.__shinka.spawner.animaux.find((x) => x.espece.id === 'requin-recif').prochainChangement = 0, true)`);

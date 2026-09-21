@@ -14,114 +14,12 @@
 
 import * as THREE from 'three';
 import { BASSIN } from './scene.js';
+import { creerSable } from './sable.js';
+import { uniformsCaustiques } from './caustiques.js';
 
 /* ============================================
-   1) LE SOL ET SES CAUSTIQUES
-   ============================================
-   Les caustiques, c'est la surface ondulée qui concentre la lumière en filaments
-   mouvants sur le fond. On ne simule pas la physique : on découpe le sol en
-   « cellules » (Voronoï) dont les centres tournent lentement, et on éclaire les
-   FRONTIÈRES entre cellules. Ça donne exactement ce réseau de lignes brillantes.
+   1) LE SOL : voir sable.js (dunes, rides, grain, ombres, caustiques partagées)
    ============================================ */
-
-const SOL_VERTEX = /* glsl */`
-  varying vec3 vPosMonde;
-  #include <fog_pars_vertex>
-
-  void main() {
-    // position du vertex dans le monde (pas dans l'objet) : le motif est
-    // ainsi accroché au bassin, pas au plan
-    vPosMonde = (modelMatrix * vec4(position, 1.0)).xyz;
-    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-    gl_Position = projectionMatrix * mvPosition;
-    #include <fog_vertex>
-  }
-`;
-
-const SOL_FRAGMENT = /* glsl */`
-  uniform float uTemps;
-  uniform vec3  uCouleurSable;
-  uniform vec3  uCouleurLumiere;
-  uniform float uIntensite;
-  varying vec3  vPosMonde;
-  #include <fog_pars_fragment>
-
-  // Un « hasard » déterministe : même entrée → même sortie. Indispensable sur GPU,
-  // où chaque pixel est calculé indépendamment sans mémoire partagée.
-  vec2 hachage2(vec2 p) {
-    return fract(sin(vec2(dot(p, vec2(127.1, 311.7)),
-                          dot(p, vec2(269.5, 183.3)))) * 43758.5453);
-  }
-
-  // Renvoie 1 sur une frontière entre deux cellules, 0 au centre d'une cellule.
-  float caustiques(vec2 p, float t) {
-    vec2 cellule = floor(p);
-    vec2 local   = fract(p);
-    float d1 = 8.0;   // distance à la cellule la plus proche…
-    float d2 = 8.0;   // …et à la deuxième : la frontière est là où d1 ≈ d2
-    for (int y = -1; y <= 1; y++) {
-      for (int x = -1; x <= 1; x++) {
-        vec2 voisine = vec2(float(x), float(y));
-        vec2 h = hachage2(cellule + voisine);
-        // le centre de chaque cellule tourne en rond, à sa propre vitesse
-        vec2 centre = voisine + 0.5 + 0.38 * sin(t + 6.2831 * h);
-        vec2 ecart  = local - centre;
-        float d = dot(ecart, ecart);
-        if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) { d2 = d; }
-      }
-    }
-    float frontiere = sqrt(d2) - sqrt(d1);
-    return pow(1.0 - smoothstep(0.0, 0.34, frontiere), 1.5);
-  }
-
-  void main() {
-    vec2 p = vPosMonde.xz;
-    // deux échelles superposées : grandes cellules lentes + petites rapides
-    float c = 0.65 * caustiques(p * 0.55, uTemps * 0.45)
-            + 0.35 * caustiques(p * 1.30 + 7.3, uTemps * 0.7);
-    // par plaques : la lumière n'arrive pas partout à la fois (grandes ondes lentes)
-    float plaques = 0.35 + 0.65 * (0.5 + 0.5 * sin(p.x * 0.17 + uTemps * 0.12) * sin(p.y * 0.13 - uTemps * 0.09));
-    c *= plaques;
-    // grain du sable : une valeur aléatoire par « grain » de 15 cm
-    float grain = 0.90 + 0.10 * hachage2(floor(p * 6.5)).x;
-
-    vec3 couleur = uCouleurSable * grain + uCouleurLumiere * c * uIntensite;
-    gl_FragColor = vec4(couleur, 1.0);
-    // ORDRE IMPORTANT (c'est celui des matériaux de Three) : tone mapping, puis
-    // conversion vers l'espace de sortie (sRGB), puis SEULEMENT le brouillard.
-    // Three fournit fogColor déjà en sRGB : mélangé avant, le lointain ressortait
-    // plus clair que le fond au lieu de s'y fondre.
-    #include <tonemapping_fragment>
-    #include <colorspace_fragment>
-    #include <fog_fragment>
-  }
-`;
-
-function creerSol(scene) {
-  const materiau = new THREE.ShaderMaterial({
-    // UniformsLib.fog ajoute fogColor / fogDensity : le renderer les remplit
-    // tout seul à chaque frame, à condition de mettre fog: true plus bas.
-    uniforms: THREE.UniformsUtils.merge([
-      THREE.UniformsLib.fog,
-      {
-        uTemps:          { value: 0 },
-        uCouleurSable:   { value: new THREE.Color(0x1f3038) },
-        uCouleurLumiere: { value: new THREE.Color(0x8fd3ff) },
-        uIntensite:      { value: 0.13 },
-      },
-    ]),
-    vertexShader: SOL_VERTEX,
-    fragmentShader: SOL_FRAGMENT,
-    fog: true,
-  });
-
-  const sol = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), materiau);
-  sol.rotation.x = -Math.PI / 2;   // un plan est vertical par défaut : on le couche
-  sol.position.y = BASSIN.sol;
-  sol.userData.intensiteBase = materiau.uniforms.uIntensite.value;
-  scene.add(sol);
-  return sol;
-}
 
 /* ============================================
    2) LES RAYONS DE LUMIÈRE
@@ -149,8 +47,9 @@ const RAYON_FRAGMENT = /* glsl */`
   void main() {
     // uv.x : 0 à gauche du plan, 1 à droite → bords fondus
     float bords = smoothstep(0.0, 0.45, vUv.x) * smoothstep(1.0, 0.55, vUv.x);
-    // uv.y : 0 en bas, 1 en haut → le rayon s'éteint en descendant
-    float hauteur = pow(vUv.y, 1.7);
+    // uv.y : 0 en bas, 1 en haut → le rayon s'éteint en descendant, et se fond dans la
+    // surface tout en haut (sinon on verrait le bord du plan quand on lève les yeux)
+    float hauteur = pow(vUv.y, 1.7) * smoothstep(1.0, 0.80, vUv.y);
     float pulsation = 0.6 + 0.4 * sin(uTemps * 0.35 + uPhase);
     float a = bords * hauteur * uIntensite * pulsation;
     gl_FragColor = vec4(uCouleur, a);   // en blending additif : couleur × a s'AJOUTE au fond
@@ -187,8 +86,8 @@ function creerRayons(scene, camera) {
     });
 
     const rayon = new THREE.Mesh(geometrie, materiau);
-    rayon.position.set(x, 3.5, z);                              // de y = -6.5 à y = 13.5
-    rayon.scale.set(THREE.MathUtils.randFloat(1.2, 3.8), 20, 1);
+    rayon.position.set(x, 1.55, z);                             // de y = -4,2 (sous le sable) à 7,3 (juste sous la surface)
+    rayon.scale.set(THREE.MathUtils.randFloat(1.2, 3.8), 11.5, 1);
     rayon.userData.inclinaison = THREE.MathUtils.randFloatSpread(0.35);
     rayon.userData.phase = Math.random() * Math.PI * 2;
     rayon.userData.intensiteBase = materiau.uniforms.uIntensite.value;   // pour le réglage jour / nuit
@@ -277,11 +176,45 @@ function creerNeige(scene) {
 
   scene.add(new THREE.Points(geometrie, materiau));
 
+  // Le SILLAGE : chaque particule garde une vitesse propre (élan) ; un animal qui passe
+  // pousse celles qui sont dans son rayon, elles s'écartent puis retombent dans la dérive.
+  const elans = new Float32Array(NOMBRE * 3);
+  const precedentes = new Map();                            // animal → sa position à la frame d'avant
+  const v = new THREE.Vector3();
   return {
-    maj(dt, temps) {
+    maj(dt, temps, animaux = []) {
+      const vivants = new Set();
+      for (const animal of animaux) {
+        const p = animal.objet.position;
+        const rayon = Math.max(0.35, (animal.rayonHitbox ?? animal.espece.taille * 0.45));
+        const avant = precedentes.get(animal);
+        if (avant) v.subVectors(p, avant).divideScalar(Math.max(dt, 1e-3)); else v.set(0, 0, 0);
+        precedentes.set(animal, (avant ?? new THREE.Vector3()).copy(p));
+        vivants.add(animal);
+        const vitesse = v.length();
+        if (vitesse < 0.05) continue;
+        const r2 = rayon * rayon;
+        for (let i = 0; i < NOMBRE; i++) {
+          const dx = positions[i * 3] - p.x, dy = positions[i * 3 + 1] - p.y, dz = positions[i * 3 + 2] - p.z;
+          if (dx > rayon || dx < -rayon || dy > rayon || dy < -rayon || dz > rayon || dz < -rayon) continue;
+          const d2 = dx * dx + dy * dy + dz * dz;
+          if (d2 > r2 || d2 < 1e-6) continue;
+          const d = Math.sqrt(d2);
+          const force = (1 - d / rayon) * vitesse * 0.9 * dt;             // plus fort près du corps, et vite
+          elans[i * 3]     += (dx / d) * force + v.x * 0.25 * dt;          // écartée… et un peu entraînée
+          elans[i * 3 + 1] += (dy / d) * force + v.y * 0.25 * dt;
+          elans[i * 3 + 2] += (dz / d) * force + v.z * 0.25 * dt;
+        }
+      }
+      for (const animal of precedentes.keys()) if (!vivants.has(animal)) precedentes.delete(animal);
+      const frein = Math.exp(-1.8 * dt);                                   // l'élan s'amortit (l'eau freine)
       for (let i = 0; i < NOMBRE; i++) {
         positions[i * 3 + 1] -= vitesses[i] * dt;                                   // chute lente
         positions[i * 3]     += Math.sin(temps * 0.4 + phases[i]) * 0.12 * dt;      // dérive latérale
+        positions[i * 3]     += elans[i * 3] * dt;                                  // le sillage
+        positions[i * 3 + 1] += elans[i * 3 + 1] * dt;
+        positions[i * 3 + 2] += elans[i * 3 + 2] * dt;
+        elans[i * 3] *= frein; elans[i * 3 + 1] *= frein; elans[i * 3 + 2] *= frein;
         if (positions[i * 3 + 1] < ZONE.yMin) positions[i * 3 + 1] = ZONE.yMax;     // recyclage en haut
       }
       geometrie.attributes.position.needsUpdate = true;   // « j'ai modifié le tableau, renvoie-le au GPU »
@@ -342,24 +275,26 @@ function creerBulles(scene) {
 /* ============================================
    Point d'entrée du module
    ============================================ */
-export function creerEau(scene, camera) {
-  const sol    = creerSol(scene);
+const CAUSTIQUES_BASE = uniformsCaustiques.uCausticsIntensite.value;
+
+export function creerEau(scene, camera, rochers = []) {
+  const sable  = creerSable(scene, rochers);
   const rayons = creerRayons(scene, camera);
   const neige  = creerNeige(scene);
   const bulles = creerBulles(scene);
 
   return {
-    maj(dt, temps) {
-      sol.material.uniforms.uTemps.value = temps;
+    maj(dt, temps, animaux = []) {
+      uniformsCaustiques.uTemps.value = temps;
       rayons.maj(dt, temps);
-      neige.maj(dt, temps);
+      neige.maj(dt, temps, animaux);
       bulles.maj(dt, temps);
     },
     // Multiplicateurs (1 = plein jour), appliqués par daytime.js (heure) et evenements.js (trouble).
     // Chaque clé est optionnelle : on ne touche qu'à ce qu'on reçoit.
     regler({ rayons: fRayons, caustiques: fCaustiques, neige: fNeige, densiteNeige } = {}) {
       if (fRayons !== undefined) rayons.regler(fRayons);
-      if (fCaustiques !== undefined) sol.material.uniforms.uIntensite.value = sol.userData.intensiteBase * fCaustiques;
+      if (fCaustiques !== undefined) uniformsCaustiques.uCausticsIntensite.value = CAUSTIQUES_BASE * fCaustiques;
       if (fNeige !== undefined) neige.regler(fNeige);
       if (densiteNeige !== undefined) neige.densite(densiteNeige);
     },

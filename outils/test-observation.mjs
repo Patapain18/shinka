@@ -13,7 +13,8 @@ const sortie = process.argv[2] ?? 'test-observation.png';
 const chrome = await piloter();
 try {
   await chrome.naviguer('http://localhost:8792/?direct&heure=13');
-  await dormir(4000);
+  await chrome.attendre(`window.__shinka && window.__shinka.spawner && window.__shinka.spawner.animaux.length > 0`);   // le décor compile ses shaders : on attend qu'un animal soit là
+  await dormir(1500);
 
   // Position à l'écran de la cible (calculée DANS la page, avec sa caméra) : l'animal non
   // observé le plus proche parmi ceux qui sont À L'ÉCRAN, gardé pendant tout le geste (__cible).
