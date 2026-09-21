@@ -1,0 +1,6 @@
+.DS_Store
+# Sauvegardes automatiques de Blender (fichier.blend1, .blend2…)
+*.blend1
+*.blend2
+# Si un jour on ajoute de l'outillage node
+node_modules/
