@@ -29,9 +29,17 @@ const SONDE = `(() => {
 
 try {
   await chrome.naviguer('http://localhost:8792/?direct&heure=13');
-  await dormir(4000);
+  await chrome.attendre('window.__shinka && window.__shinka.spawner && window.__shinka.spawner.animaux.length > 0');   // le décor compile : on attend un animal
+  await dormir(1000);
 
   /* ---------- 1) mémoire ---------- */
+  // Échauffement : chaque espèce entre une fois, pour que ses textures (couleur, relief, brillance)
+  // soient déjà sur le GPU. Sinon, une espèce qui entrerait PENDANT la mesure fausserait le compte :
+  // ses cartes s'ajoutent aux textures sans être des textures d'os.
+  await chrome.evaluer(`(() => { const s = window.__shinka; for (const e of s.especes) s.spawner.faireEntrer(e, 0.5); return true; })()`);
+  await dormir(1500);
+  await chrome.evaluer(`(window.__shinka.spawner.animaux.forEach((a) => { a.vitesse = 15; }), true)`);
+  await dormir(4000);
   const avant = await chrome.evaluer(SONDE);
   await chrome.evaluer(`(() => { const s = window.__shinka; const e = s.especes.find((x) => x.id === 'chirurgien');
     for (let i = 0; i < 6; i++) s.spawner.faireEntrer(e, 0.5); return s.spawner.animaux.length; })()`);

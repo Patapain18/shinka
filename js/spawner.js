@@ -125,7 +125,7 @@ export function creerSpawner(scene, camera, horloge, { surEntree } = {}) {
     }
     dernierPassage.set(espece.id, maintenant);
     if (RARE(espece)) dernierRare = maintenant;
-    surEntree?.(espece);
+    surEntree?.(espece, dernier);   // qui, et lequel (le son part de sa position)
     console.info(`→ ${espece.nom} (${espece.rarete}${nb > 1 ? `, ×${nb}` : ''}) — ${horloge.phase}`);
     return dernier;
   }

@@ -68,12 +68,17 @@ shinka/
 │   ├── daytime.js      heure réelle → phase (aube/jour/crépuscule/nuit) → presets de lumière
 │   ├── observe.js      raycast souris → animal survolé → jauge → observation validée
 │   ├── collection.js   lecture/écriture localStorage
-│   ├── audio.js        playlist + fondu enchaîné, ambiance, sons
+│   ├── audio.js        côté page : player, musique (deux lecteurs, sonie égalisée), relais vers le graphe
+│   ├── son/            tout le son FABRIQUÉ (aucun fichier) — voir §9
+│   │   ├── dsp.js      bruits, crépitement, réponse impulsionnelle, enveloppes, bulles, trémolo
+│   │   ├── ambiance.js le lit d'hydrophone : houle, flux, crevettes, bulles, lointain
+│   │   ├── faune.js    un souffle par coup de queue, spatialisé, budget de voix
+│   │   ├── chants.js   la baleine (unités → phrase) et l'aura du requin-baleine
+│   │   └── graphe.js   la table de mixage : bus, limiteur, réverbération, chants, sons d'interface
 │   └── ui.js           écran d'entrée, carnet, fiches, toasts, player
 ├── models/             un .glb par espèce + une image .png (silhouette/vignette) par espèce
 ├── audio/
-│   ├── music/          morceaux CC (mp3/ogg) + CREDITS.md
-│   └── sfx/            ambiance sous-marine (boucle), carillon d'observation, grondement « légendaire »
+│   └── music/          morceaux CC0 (mp3) + CREDITS.md — le seul son enregistré du site
 └── textures/           sable, caustiques, particules
 ```
 
@@ -404,20 +409,71 @@ Le décor est fait de modules qui ne savent rien des animaux, orchestrés par `m
 
 ---
 
-## 9. Audio
+## 9. Audio (v2, 2026-09-22)
 
-- Le `AudioContext` est créé au clic sur « Entrer » (règle des navigateurs).
-- **Musique** : 4-6 morceaux CC0/CC-BY (ambient, lo-fi, piano lent). Deux lecteurs en alternance
-  avec `GainNode` pour un fondu enchaîné de 4 s. Ordre aléatoire sans répétition immédiate.
-- **Ambiance** : une boucle « sous l'eau » (grondement sourd + bulles lointaines) à bas volume, en permanence.
-- **Sons** : carillon (nouvelle espèce), tick discret (déjà vue), grondement grave (un légendaire entre en scène),
-  quelques bulles aléatoires.
-- **Player** discret en bas : ♪ titre — artiste, volume, mute, bouton crédits (obligatoire pour le CC-BY).
-- Source retenue : l'Internet Archive, via son API de recherche (`services/search/v1/scrape`, filtre `licenseurl:*zero*`),
-  en ne gardant que des sorties **auto-publiées par leurs auteurs** (netlabel Genetic Trance, artistes indépendants) —
-  jamais les albums commerciaux ou mix DJ étiquetés CC0 à tort. Provenance dans `audio/music/CREDITS.md`.
-- Fait : le filtre passe-bas (5,2 kHz) sur le bus musique, pour sonner « à travers l'eau ».
-- Test : `node outils/test-audio.mjs sortie.png` (clic → contexte running, lecture qui avance, player visible).
+Règle : **tout le son est fabriqué, sauf la musique**. Aucun enregistrement d'ambiance, d'animal ou
+d'effet — Web Audio calcule tout en temps réel, et le même code rend des fichiers hors ligne pour
+écouter et mesurer (le « studio »). Le `AudioContext` naît au clic sur « Entrer » (règle des navigateurs)
+et se relance seul au retour d'un onglet ou d'un appel (iOS).
+
+### La table de mixage (`son/graphe.js`)
+
+```
+ambiance (lit) ───────────────────────────┐
+faune (un panner par animal proche) ──────┤
+chants (un second panner, porte loin) ────┼─→ limiteur ─→ master ─→ sortie
+sons d'interface (+ écho court) ──────────┤
+musique ─→ passe-bas 5,2 kHz ─────────────┘   (baisse de 8 dB pendant un chant)
+        envois → réverbération du bassin (un convolveur partagé, RI calculée) → retour ┘
+```
+
+Niveaux mesurés au studio (avant le master, réglé à 0,6 par défaut) : lit d'ambiance ≈ −31 LUFS ;
+musique nominale −37 LUFS (cible −23 LUFS par morceau, bus −14 dB) ; souffles d'un requin à 5 m :
+crêtes vers −25 dBFS ; chants ≈ 10-12 dB au-dessus du lit. Le limiteur (seuil −12 dBFS) rattrape les sommes.
+
+### Le lit d'ambiance (`son/ambiance.js`)
+Cinq couches, comme sur un vrai hydrophone : la **houle** (bruit brun < 105 Hz, deux LFO de 32 s et 21 s
+qui ne se répètent jamais ensemble, sub à 38 Hz), le **flux** (bruit rose en bande médium qui se promène),
+le **crépitement** des crevettes-pistolets (clics de Poisson, amplitudes en loi de puissance, colonies qui
+vont et viennent), les **bulles** (chapelets du diffuseur à la fréquence de Minnaert f = 3,26 / rayon, gros
+« gloup » isolés) et le **lointain** (chocs sourds rares). Les événements sont planifiés par
+`planifier(maintenant, horizon)` à chaque frame — jamais de `setTimeout`, donc rendable hors ligne.
+
+### Les animaux (`son/faune.js`)
+Une **recette** par espèce (bande de fréquences, durée, force, phases du cycle, thump pour les géants ;
+frottement continu pour le chirurgien, scintillement modulé pour le banc). Un souffle = bruit blanc dans un
+passe-bande qui **glisse de l'aigu vers le grave**, enveloppe courte ; déclenché quand la phase de l'action
+« swim » franchit 0,25 et 0,75 (la queue passe au milieu), pondéré par le poids de l'action (0 en glisse).
+Spatialisation : `PannerNode` (HRTF en qualité haute, equalpower en basse) à la position de l'animal,
+l'auditeur = la caméra ; atténuation par la distance ET passe-bas qui descend avec elle (l'eau avale les
+aigus : le pendant du brouillard). Budget : 8 voix, les plus proches pondérées par la racine de la taille.
+
+### Les chants (`son/chants.js`)
+- **Baleine à bosse** : une voix à quatre harmoniques dont la fondamentale glisse (interpolation en log),
+  vibrato commun en cents, grognement (AM ~30 Hz) sur les unités graves, deux formants, saturation douce.
+  Six unités (gémissement, montée, cri, grognement, descente, whup) et trois phrases types, toutes tirées au
+  sort dans des fourchettes : jamais deux fois le même chant. Elle chante en entrant, puis une seconde fois 30 s après.
+- **Requin-baleine** : muet comme tous les requins — son « chant » est une aura : bourdon à 36 Hz qui
+  s'épanouit en quinte/octave, souffle d'eau qui gonfle, trois cristaux très haut.
+- Les rares (marteau, manta) gardent le grondement. Pendant un chant, la musique s'efface.
+
+### La musique
+Six morceaux CC0 ; chacun porte sa **sonie mesurée** (`sonie`, EBU R128 : `node outils/sonie.mjs`) et le
+lecteur le ramène à la cible (`SONIE_CIBLE`). Avant : 19 dB d'écart entre le plus fort et le plus faible,
+d'où « la musique prend trop de place » — un morceau sur deux écrasait l'ambiance. Deux lecteurs en
+alternance, fondu de 4 s, jamais deux fois de suite le même, player discret + crédits (obligatoire).
+
+### Le studio (`outils/studio.html`, `outils/rendre-son.mjs`)
+Le graphe du site branché sur un `OfflineAudioContext` : `node outils/rendre-son.mjs <scène> sortie.wav [durée]`
+(scènes `ambiance`, `fixe`, `faune`, `chants`, `musique`, `mix`, option `solo` sans le lit) écrit le .wav,
+mesure la sonie (ffmpeg), encode un .mp3 et trace un spectrogramme (`outils/spectrogramme.py`, échelle log).
+Pièges appris : (1) une chute exponentielle vers −80 dB est inaudible au tiers de sa durée — les souffles
+sonnaient comme des clics ; l'enveloppe monte en linéaire et descend vers −40 dB ; (2) hors ligne, tout le
+code tourne AVANT le rendu : un `disconnect()` est immédiat et coupe le nœud pour toute la durée — la faune
+ne débranche pas en hors ligne ; (3) un LFO **ajouté** au gain d'une enveloppe fuit après l'extinction —
+le trémolo est un gain **en série** ; (4) le passe-bande ne garde qu'un dixième du bruit blanc : calibration
++18 dB mesurée, une fois, dans `faune.js`. Test : `node outils/test-audio.mjs` (contexte, lecture, émetteurs,
+chant, signal réel au master).
 
 ---
 
@@ -437,6 +493,7 @@ Chaque étape donne quelque chose de visible et qui marche. On n'attaque pas la 
 | 8 | ~~Premier vrai modèle~~ → fusionné dans l'étape 3 : le requin généré (`models/requin-recif.glb`) est disponible dès maintenant, plus besoin de placeholders | ✅ pipeline validé le 2026-09-21 |
 | 9 | ✅ 2026-09-21 — `evenements.js` (toutes les 12-25 min, `?evenement=banc\|geant\|trouble`) : banc de 300 sardines en tourbillon (`banc.js` : InstancedMesh + nage en vertex shader + rotation autour d'un centre), baleine à bosse au loin avec son chant, eau trouble (modulation brume/soleil/rayons/neige) ; sardine en espèce commune (banc de 150) ; `lumiere.js` partagé | Les surprises |
 | 10 | ✅ 2026-09-21 — `rendu.js` (EffectComposer : bloom 0,28 / seuil 0,85, passe « vitre » : aberration chromatique, reflet oblique lié à la parallaxe, vignette, grain, OutputPass), `qualite.js` (haute/basse, auto : médiane < 36 fps → basse pour la visite, bouton du HUD mémorisé, `?qualite=`), tactile (toucher et maintenir, `touch-action: none`), mise en page ≤ 640 px, README, `.nojekyll`. Publication GitHub Pages : à faire avec l'accord de Mathis | En ligne |
+| 11 | ✅ 2026-09-22 — **Son v2** : `js/son/` (dsp, ambiance à cinq couches, faune spatialisée calée sur l'animation, chants de la baleine et du requin-baleine, graphe avec limiteur + réverbération), musique égalisée en sonie et 14 dB sous le lit, studio hors ligne (`outils/rendre-son.mjs`, spectrogrammes) | On entend le bassin |
 
 Le premier `.glb` existe déjà : l'étape 3 charge directement le requin (GLTFLoader + AnimationMixer).
 
@@ -456,7 +513,10 @@ protocole DevTools : la page vit, on attend, on capture, et la console de la pag
   contexte WebGL perdu/restauré (`WEBGL_lose_context`), bouton de qualité (bascule + mémorisation).
 - `node outils/vignettes.mjs [id …]` — génère `models/<id>.png` (512×512, fond transparent, profil) pour le carnet.
   À relancer après chaque nouveau modèle. La silhouette « ??? » est la même image noircie en CSS.
-- `outils/chrome.mjs` — la bibliothèque commune (`piloter()` : naviguer, evaluer, souris, capturer).
+- `node outils/test-audio.mjs sortie.png` — clic → contexte actif, lecture qui avance, émetteurs d'animaux, chant, signal au master.
+- `node outils/rendre-son.mjs <scène> sortie.wav [durée] [graine] [piste] [solo]` — le studio : rend une scène sonore
+  hors ligne (.wav + .mp3 + spectrogramme .png + sonie). `node outils/sonie.mjs` mesure la sonie des morceaux (voir §9).
+- `outils/chrome.mjs` — la bibliothèque commune (`piloter()` : naviguer, evaluer, attendre, souris, capturer).
 - `serveur.py` — le serveur local (utilisé par `lancer.command` et la config preview) : comme `http.server` mais
   avec `Cache-Control: no-store`, sinon le navigateur garde de vieux modules après une mise à jour
   (« does not provide an export named … »). En cas de doute : rechargement forcé (⌘⇧R).

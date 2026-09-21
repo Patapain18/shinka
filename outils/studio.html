@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Studio — Shinka</title>
+<!-- ============================================
+     STUDIO — rendre le son du bassin en fichier
+     ============================================
+     Le même graphe que le site (js/son/graphe.js), branché sur un OfflineAudioContext :
+     le navigateur calcule N secondes de son plus vite que le temps réel et nous rend le
+     tampon. On l'encode en .wav ; node outils/rendre-son.mjs le récupère, le mesure (LUFS)
+     et en tire un spectrogramme. C'est la « pellicule » du son : on juge à l'oreille ET à
+     l'image, avant de toucher au site.
+     Paramètres : ?scene=ambiance|fixe|faune|chants|musique|mix &duree=30 &graine=7 &piste=2 &solo (sans le lit)
+     ============================================ -->
+<script type="importmap">{ "imports": { "three": "https://unpkg.com/three@0.170.0/build/three.module.js" } }</script>
+<style>body{font:14px/1.5 monospace;color:#cde;background:#06111a;padding:16px}pre{white-space:pre-wrap}</style>
+</head>
+<body>
+<pre id="journal">studio…</pre>
+<script type="module">
+import * as THREE from 'three';
+import { creerGraphe, SONIE_CIBLE } from '../js/son/graphe.js';
+import { dB } from '../js/son/dsp.js';
+import { PLAYLIST } from '../js/playlist.js';
+import { ESPECES } from '../js/species.js';
+
+const journal = (m) => { document.getElementById('journal').textContent += '\n' + m; console.log(m); };
+const params = new URLSearchParams(location.search);
+const scene = params.get('scene') ?? 'ambiance';
+const duree = +(params.get('duree') ?? 30);
+const graine = +(params.get('graine') ?? 7);
+const indexPiste = +(params.get('piste') ?? 2);
+let reperes = [];                     // { t, nom } : les repères tracés sur le spectrogramme
+window.__pret = false;
+window.__erreur = null;
+
+/* ---------- De faux animaux : ce que faune.js attend d'un Animal ou d'un Banc ---------- */
+// Période de nage plausible par espèce (le site lit la vraie durée du clip ; ici on n'a pas les GLB)
+const PERIODES = { 'requin-recif': 1.4, 'requin-marteau': 1.6, 'requin-baleine': 3.2, baleine: 4.6, manta: 3.0, tortue: 2.2, meduse: 3.6 };
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+function faux(id, { depart, arrivee, debut, fin, banc = false, tourbillon = false }) {
+  const espece = ESPECES.find((e) => e.id === id);
+  const a = { espece, objet: { position: depart.clone() }, vitesse: espece.vitesse, fini: true, debut, fin, depart, arrivee };
+  if (banc) { a.nombre = espece.groupe; a.tourbillon = tourbillon; }
+  else {
+    const clip = { duration: PERIODES[id] ?? 2 };
+    a.actions = { nage: { time: 0, getClip: () => clip, getEffectiveWeight: () => 1 } };
+  }
+  return a;
+}
+function avancer(a, t, dt) {
+  const u = (t - a.debut) / (a.fin - a.debut);
+  a.fini = !(u >= 0 && u <= 1);      // absent avant son entrée et après sa sortie
+  a.objet.position.lerpVectors(a.depart, a.arrivee, THREE.MathUtils.clamp(u, 0, 1));
+  if (a.actions && !a.fini) { const c = a.actions.nage.getClip(); a.actions.nage.time = (a.actions.nage.time + dt) % c.duration; }
+}
+function parade(ids, { z = -5, depuis = 1, pas = 6, duree = 5.5 } = {}) {
+  const animaux = ids.map((id, i) => faux(id, {
+    depart: V(-9, 1.2, z), arrivee: V(9, 1.2, z), debut: depuis + i * pas, fin: depuis + i * pas + duree, banc: id === 'sardine',
+  }));
+  reperes.push(...ids.map((id, i) => ({ t: depuis + i * pas, nom: id })));
+  return animaux;
+}
+
+/* ---------- La musique, hors ligne : le fichier décodé, égalisé, dans le bus musique ---------- */
+async function musique(g, ctx, t0, index) {
+  const piste = PLAYLIST[index];
+  const donnees = await (await fetch('../' + piste.fichier)).arrayBuffer();
+  const tampon = await ctx.decodeAudioData(donnees);
+  const s = ctx.createBufferSource();
+  s.buffer = tampon;
+  const norme = ctx.createGain();
+  norme.gain.value = dB(SONIE_CIBLE - piste.sonie);
+  s.connect(norme).connect(g.busMusique);
+  s.start(t0, Math.min(40, tampon.duration / 3));   // au cœur du morceau, pas dans l'intro
+  journal(`musique : ${piste.titre} (${piste.sonie} LUFS → ×${norme.gain.value.toFixed(2)})`);
+}
+
+/* ---------- Les scènes ---------- */
+const TOUTES = ['requin-recif', 'chirurgien', 'requin-marteau', 'tortue', 'meduse', 'manta', 'requin-baleine', 'sardine', 'baleine'];
+const SCENES = {
+  ambiance: () => ({ animaux: [], maj() {} }),
+  fixe: () => {                                          // un requin immobile à 5 m : pour régler et déboguer
+    const a = faux('requin-recif', { depart: V(2, 1.2, -5), arrivee: V(2, 1.2, -5), debut: 0.5, fin: 60 });
+    return { animaux: [a], maj(t, dt) { avancer(a, t, dt); } };
+  },
+  faune: () => {                                         // chaque espèce traverse de gauche à droite, à 5 m
+    const animaux = parade(TOUTES);
+    return { animaux, maj(t, dt) { for (const a of animaux) avancer(a, t, dt); } };
+  },
+  chants: (g) => {
+    const rb = faux('requin-baleine', { depart: V(6, 0.5, -10), arrivee: V(-6, 0.5, -10), debut: 0, fin: 60 });
+    const ba = faux('baleine', { depart: V(-8, 2, -18), arrivee: V(8, 2, -18), debut: 0, fin: 60 });
+    reperes.push({ t: 1, nom: 'aura requin-baleine' }, { t: 18, nom: 'chant baleine' });
+    let etape = 0;
+    return {
+      animaux: [rb, ba],
+      maj(t, dt) {
+        avancer(rb, t, dt); avancer(ba, t, dt);
+        if (etape === 0 && t >= 1) { etape = 1; g.chant('requin-baleine', rb, t); }
+        if (etape === 1 && t >= 18) { etape = 2; g.chant('baleine', ba, t); }
+      },
+    };
+  },
+  musique: async (g, ctx) => { await musique(g, ctx, 0, indexPiste); return { animaux: [], maj() {} }; },
+  mix: async (g, ctx) => {                               // tout ensemble, aux niveaux du site
+    await musique(g, ctx, 0, indexPiste);
+    const animaux = [
+      faux('requin-recif', { depart: V(-8, 1.4, -4), arrivee: V(8, 1.4, -6), debut: 4, fin: 11 }),
+      faux('sardine', { depart: V(6, 1, -7), arrivee: V(-6, 1.5, -7), debut: 13, fin: 26, banc: true }),
+      faux('baleine', { depart: V(-9, 2, -18), arrivee: V(9, 2, -18), debut: 24, fin: 60 }),
+      faux('requin-marteau', { depart: V(9, 0.8, -5), arrivee: V(-9, 0.8, -5), debut: 42, fin: 50 }),
+    ];
+    reperes.push({ t: 4, nom: 'requin' }, { t: 13, nom: 'banc' }, { t: 27, nom: 'chant baleine' }, { t: 42, nom: 'marteau' });
+    let chante = false;
+    return {
+      animaux,
+      maj(t, dt) {
+        for (const a of animaux) avancer(a, t, dt);
+        if (!chante && t >= 27) { chante = true; g.chant('baleine', animaux[2], t); }
+      },
+    };
+  },
+};
+
+/* ---------- Le rendu ---------- */
+function encoderWav(tampon) {
+  const n = tampon.length, c = tampon.numberOfChannels, sr = tampon.sampleRate;
+  const octets = new ArrayBuffer(44 + n * c * 2);
+  const v = new DataView(octets);
+  const ecrire = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  ecrire(0, 'RIFF'); v.setUint32(4, 36 + n * c * 2, true); ecrire(8, 'WAVE');
+  ecrire(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, c, true);
+  v.setUint32(24, sr, true); v.setUint32(28, sr * c * 2, true); v.setUint16(32, c * 2, true); v.setUint16(34, 16, true);
+  ecrire(36, 'data'); v.setUint32(40, n * c * 2, true);
+  const canaux = [];
+  for (let k = 0; k < c; k++) canaux.push(tampon.getChannelData(k));
+  let o = 44, crete = 0;
+  for (let i = 0; i < n; i++) for (let k = 0; k < c; k++) {
+    const x = Math.max(-1, Math.min(1, canaux[k][i]));
+    crete = Math.max(crete, Math.abs(x));
+    v.setInt16(o, x < 0 ? x * 32768 : x * 32767, true); o += 2;
+  }
+  journal(`crête : ${(20 * Math.log10(crete || 1e-9)).toFixed(1)} dBFS`);
+  const u8 = new Uint8Array(octets);
+  let s = '';
+  for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+try {
+  const sr = 48000;
+  const ctx = new OfflineAudioContext(2, Math.ceil(sr * duree), sr);
+  const g = creerGraphe(ctx, { graine, spatial: params.get('spatial') ?? 'hrtf' });
+  g.master.gain.value = 1;                               // pas de curseur ici : on mesure le mix nu
+  if (params.has('solo')) g.busAmbiance.gain.value = 0;   // &solo : la couche seule, sans le lit d'ambiance
+  const camera = new THREE.PerspectiveCamera(55, 16 / 9, 0.1, 120);
+  camera.position.set(0, 1.6, 0);
+  camera.lookAt(0, 1.2, -12);
+  camera.updateMatrixWorld();
+  journal(`scène « ${scene} », ${duree} s, graine ${graine}`);
+  const scenario = await SCENES[scene](g, ctx, camera);
+  // La boucle du site, simulée à 60 images/s : chaque frame planifie l'ambiance et suit les animaux
+  const pas = 1 / 60;
+  for (let t = 0; t < duree; t += pas) { scenario.maj(t, pas); g.maj(t, pas, scenario.animaux, camera); }
+  journal(`émetteurs vivants : ${g.faune.nombre}, souffles programmés : ${g.faune.souffles}`);
+  const debut = performance.now();
+  const tampon = await ctx.startRendering();
+  journal(`rendu en ${((performance.now() - debut) / 1000).toFixed(1)} s`);
+  window.__wav = encoderWav(tampon);
+  window.__reperes = JSON.stringify(reperes);
+  window.__pret = true;
+  journal('prêt');
+} catch (e) {
+  window.__erreur = String(e && e.stack ? e.stack : e);
+  journal('ERREUR ' + window.__erreur);
+}
+</script>
+</body>
+</html>

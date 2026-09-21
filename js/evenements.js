@@ -65,11 +65,10 @@ export function creerEvenements({ camera, horloge, eau, audio, spawner }) {
     geant: {
       duree: 130,
       demarrer(e) {
-        e.animal = spawner().faireEntrer(baleine, 0.25);     // déjà presque dans le champ
-        audio.chant();
+        e.animal = spawner().faireEntrer(baleine, 0.25);     // déjà presque dans le champ ; elle chante en entrant (spawner → audio.arrivee)
       },
       maj(e) {
-        if (e.t > 30 && !e.second) { e.second = true; audio.chant(); }
+        if (e.t > 30 && !e.second) { e.second = true; audio.chant('baleine', e.animal); }
       },
       finir() {},
     },

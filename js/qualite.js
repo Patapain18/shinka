@@ -26,7 +26,7 @@ const FENETRE = 240;   // frames gardées pour la mesure (4 s à 60 fps)
 const DELAI = 5;       // s de vie minimum avant de juger (le temps que tout se mette en place)
 const CADENCE = 60;    // on ne trie la fenêtre (pour la médiane) qu'une frame sur 60
 
-export function creerQualite({ rendu, renderer, scene, eau, redimensionner, reglages, sauverReglages, bouton, surBascule }) {
+export function creerQualite({ rendu, renderer, scene, eau, audio, redimensionner, reglages, sauverReglages, bouton, surBascule }) {
   const params = new URLSearchParams(location.search);
   const forcee = params.get('qualite');
   if (forcee) sauverReglages({ qualite: 'auto' });                       // un ?qualite= efface le choix mémorisé
@@ -52,6 +52,7 @@ export function creerQualite({ rendu, renderer, scene, eau, redimensionner, regl
     renderer.setPixelRatio(haute ? Math.min(window.devicePixelRatio, 1.5) : 1);
     redimensionner();
     eau.regler({ densiteNeige: haute ? 1 : 0.5 });
+    audio?.regler({ spatial: haute ? 'hrtf' : 'simple' });   // le relief binaural (HRTF) coûte du CPU : pas en basse
     bouton.textContent = `qualité ${niveau}${descendu ? ' (auto)' : ''}`;
     bouton.title = haute ? 'Passer en qualité basse (sans bloom, moins de particules)' : 'Passer en qualité haute';
     console.info(`qualité : ${niveau}${auto ? ' (auto)' : ''}`);

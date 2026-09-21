@@ -104,7 +104,7 @@ ui.majCompteur(nombreObservees(), ESPECES.length);
 
 /* ---------- Qualité : haute / basse — l'URL, le visiteur (bouton du HUD), sinon l'auto ---------- */
 const qualite = creerQualite({
-  rendu, renderer, scene, eau, redimensionner: redimensionnerTout,
+  rendu, renderer, scene, eau, audio, redimensionner: redimensionnerTout,
   reglages: reglages(), sauverReglages,
   bouton: document.getElementById('hud-qualite'),
   // L'auto vient de descendre : on le dit (si on est entré : avant, l'écran d'entrée cache tout)
@@ -147,7 +147,7 @@ let spawner = null;   // n'existe qu'une fois les modèles chargés
 chargerModeles(ESPECES, (progression) => { barre.style.width = `${Math.round(progression * 100)}%`; })
   .then(() => {
     spawner = creerSpawner(scene, camera, horloge, {
-      surEntree: (espece) => { if (espece.rarete === 'rare' || espece.rarete === 'legendaire') audio.grondement(); },
+      surEntree: (espece, animal) => audio.arrivee(espece, animal),   // légendaire : son chant ; rare : un grondement
     });
     if (direct) {
       entree.remove();
@@ -256,6 +256,7 @@ function boucle() {
   surface.maj(temps);
   spawner?.maj(dt);               // « ?. » : ne fait rien tant que spawner vaut null
   evenements.maj(dt);
+  audio.maj(dt, spawner ? spawner.animaux : [], camera);   // la caméra écoute, les animaux proches sonnent
   observation.maj(dt);
   demo(temps);
   qualite.maj(dt);
