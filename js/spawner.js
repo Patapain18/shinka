@@ -21,7 +21,7 @@ const PITIE = 360;            // s sans rare ni légendaire avant d'en forcer un
 const MAX_ANIMAUX = 8;
 const RARE = (e) => e.rarete === 'rare' || e.rarete === 'legendaire';
 
-export function creerSpawner(scene, camera, horloge) {
+export function creerSpawner(scene, camera, horloge, { surEntree } = {}) {
   const animaux = [];
   const dernierPassage = new Map();   // id d'espèce → instant (s) de son dernier passage
   let dernierRare = 0;
@@ -106,6 +106,7 @@ export function creerSpawner(scene, camera, horloge) {
     }
     dernierPassage.set(espece.id, maintenant);
     if (RARE(espece)) dernierRare = maintenant;
+    surEntree?.(espece);
     console.info(`→ ${espece.nom} (${espece.rarete}${nb > 1 ? `, ×${nb}` : ''}) — ${horloge.phase}`);
   }
 

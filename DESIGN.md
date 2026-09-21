@@ -329,8 +329,11 @@ via un filtre CSS, et pour la fiche débloquée.
 - **Sons** : carillon (nouvelle espèce), tick discret (déjà vue), grondement grave (un légendaire entre en scène),
   quelques bulles aléatoires.
 - **Player** discret en bas : ♪ titre — artiste, volume, mute, bouton crédits (obligatoire pour le CC-BY).
-- Pistes de recherche : Pixabay Music, Free Music Archive (filtre CC), ccMixter, Incompetech (Kevin MacLeod, CC-BY).
-- *(idée v2)* filtre passe-bas sur la musique pour qu'elle sonne « à travers l'eau », qui s'ouvre quand on observe.
+- Source retenue : l'Internet Archive, via son API de recherche (`services/search/v1/scrape`, filtre `licenseurl:*zero*`),
+  en ne gardant que des sorties **auto-publiées par leurs auteurs** (netlabel Genetic Trance, artistes indépendants) —
+  jamais les albums commerciaux ou mix DJ étiquetés CC0 à tort. Provenance dans `audio/music/CREDITS.md`.
+- Fait : le filtre passe-bas (5,2 kHz) sur le bus musique, pour sonner « à travers l'eau ».
+- Test : `node outils/test-audio.mjs sortie.png` (clic → contexte running, lecture qui avance, player visible).
 
 ---
 
@@ -346,7 +349,7 @@ Chaque étape donne quelque chose de visible et qui marche. On n'attaque pas la 
 | 4 | ✅ 2026-09-21 — `daytime.js` (heure réelle → 8 repères de lumière interpolés, `?heure=` / `?tempo=`), spawner pondéré + heures + repos + pitié + groupes, HUD heure/phase, espèces `chirurgien` (commun, jour, ×4) et `requin-marteau` (rare, crépuscule/nuit) | Nuit ≠ jour |
 | 5 | ✅ 2026-09-21 — `observe.js` (sphère englobante ×1,3, jauge 2-3,5 s, vidage 0,5 s), `collection.js` (localStorage `shinka.v1`), `ui.js` (curseur-anneau SVG, toasts par rareté, compteur HUD), halo émissif par instance (`animal.js`) | Le cœur du site |
 | 6 | ✅ 2026-09-21 — `carnet.js` (panneau touche C / bouton, grille triée par rareté, silhouettes CSS, fiches complètes), vignettes générées par `outils/vignettes.mjs` (visionneuse `?vignette`), observation en pause quand le carnet est ouvert | On peut « collectionner » |
-| 7 | Audio : playlist, fondu, ambiance, sons, player, crédits | L'ambiance est là |
+| 7 | ✅ 2026-09-21 — `audio.js` : ambiance et sons **générés** (Web Audio : bruit brun filtré qui respire, sub, bulles, carillon, tic, grondement), 6 morceaux CC0 d'archive.org (`playlist.js`, `audio/music/CREDITS.md`), deux lecteurs à fondu enchaîné de 4 s, filtre « sous l'eau », player + crédits, volume/mute persistés | L'ambiance est là |
 | 8 | ~~Premier vrai modèle~~ → fusionné dans l'étape 3 : le requin généré (`models/requin-recif.glb`) est disponible dès maintenant, plus besoin de placeholders | ✅ pipeline validé le 2026-09-21 |
 | 9 | Événements rares (banc, géant, trouble) | Les surprises |
 | 10 | Polish : post-processing, vitre, perf, version tablette/mobile minimale, déploiement GitHub Pages | En ligne |

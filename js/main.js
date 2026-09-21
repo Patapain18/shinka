@@ -8,6 +8,7 @@
    Étape 4 : l'horloge (heure réelle) règle la lumière et renseigne le spawner.
    Étape 5 : observation (curseur-jauge), collection, toasts, halo.
    Étape 6 : le carnet (panneau, grille, fiches).
+   Étape 7 : l'audio (ambiance générée, sons, musique CC0).
    ============================================ */
 
 import * as THREE from 'three';
@@ -21,6 +22,7 @@ import { creerUI } from './ui.js';
 import { creerObservation } from './observe.js';
 import { nombreObservees } from './collection.js';
 import { creerCarnet } from './carnet.js';
+import { creerAudio } from './audio.js';
 
 /* ---------- Le renderer, avec filet de sécurité ---------- */
 // Si WebGL est indisponible, on le dit au visiteur au lieu de lui laisser un écran noir.
@@ -60,6 +62,9 @@ const params = new URLSearchParams(location.search);
 const direct = params.has('direct');
 const barre = document.getElementById('barre-chargement');
 
+/* ---------- Audio (démarre au premier geste : règle des navigateurs) ---------- */
+const audio = creerAudio();
+
 /* ---------- UI (curseur, toasts, compteur) et observation ---------- */
 const ui = creerUI();
 ui.majCompteur(nombreObservees(), ESPECES.length);
@@ -77,7 +82,7 @@ const observation = creerObservation({
       ui.toast({ titre: `vu ${compte} fois`, nom, rarete, discret: true });
     }
     carnet.rafraichir();
-    // (étape 7 : carillon ici)
+    if (premiere) audio.carillon(); else audio.tic();
   },
 });
 
@@ -92,8 +97,17 @@ let spawner = null;   // n'existe qu'une fois les modèles chargés
 
 chargerModeles(ESPECES, (progression) => { barre.style.width = `${Math.round(progression * 100)}%`; })
   .then(() => {
-    spawner = creerSpawner(scene, camera, horloge);
-    if (direct) { entree.remove(); document.body.classList.add('entre'); return; }
+    spawner = creerSpawner(scene, camera, horloge, {
+      surEntree: (espece) => { if (espece.rarete === 'rare' || espece.rarete === 'legendaire') audio.grondement(); },
+    });
+    if (direct) {
+      entree.remove();
+      document.body.classList.add('entre');
+      // pas de clic « Entrer » : l'audio démarrera au premier geste, quel qu'il soit
+      window.addEventListener('pointerdown', () => audio.demarrer(), { once: true });
+      window.addEventListener('keydown', () => audio.demarrer(), { once: true });
+      return;
+    }
     btnEntrer.disabled = false;
     btnEntrer.textContent = 'Entrer';
   })
@@ -105,6 +119,7 @@ chargerModeles(ESPECES, (progression) => { barre.style.width = `${Math.round(pro
 btnEntrer.addEventListener('click', () => {
   entree.classList.add('cache');   // le CSS fait le fondu de 2,5 s
   document.body.classList.add('entre');   // curseur système masqué : le nôtre prend le relais
+  audio.demarrer();                       // LE geste qui autorise le son
   // (étape 7 : c'est ICI qu'on démarrera l'audio — le clic vient d'avoir lieu)
 }, { once: true });                // l'écouteur se retire tout seul après le 1er clic
 
@@ -162,7 +177,7 @@ function demo(temps) {
 }
 
 /* ---------- Poignée pour les outils de test (outils/*.mjs) ---------- */
-window.__shinka = { camera, get spawner() { return spawner; }, observation, horloge, carnet };
+window.__shinka = { camera, get spawner() { return spawner; }, observation, horloge, carnet, audio };
 
 /* ---------- Boucle ---------- */
 const chrono = new THREE.Clock();   // le chronomètre de la boucle (l'horloge du jour, c'est `horloge`)

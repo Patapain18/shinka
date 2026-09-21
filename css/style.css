@@ -209,7 +209,7 @@ body.entre { cursor: none; }
 .toasts {
   position: fixed;
   left: 50%;
-  bottom: 56px;
+  bottom: 84px;                 /* au-dessus du player */
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
@@ -391,3 +391,53 @@ body.carnet-ouvert .curseur { opacity: 0; }
   color: rgba(217, 236, 245, .85);
 }
 .fiche-observation { margin-top: 1.4rem; font-size: .7rem; letter-spacing: .15em; text-transform: uppercase; color: var(--brume); }
+
+/* ---------- Le player ---------- */
+.player {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100% - 32px);
+  padding: .45rem .5rem .45rem .9rem;
+  border: 1px solid rgba(217, 236, 245, .14);
+  border-radius: 999px;
+  background: rgba(2, 7, 12, .45);
+  backdrop-filter: blur(8px);
+  font-size: .68rem;
+  letter-spacing: .12em;
+  color: rgba(217, 236, 245, .65);
+}
+.player-btn { background: transparent; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; }
+.player-btn:hover { color: var(--ecume); }
+.player-mute { font-size: 1rem; line-height: 1; }
+.player-mute.coupe { opacity: .4; text-decoration: line-through; }
+.player-titre { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40ch; }
+.player-volume { width: 80px; accent-color: var(--ecume); cursor: pointer; }
+.player-lien { text-transform: uppercase; padding: .3rem .7rem; border: 1px solid rgba(217, 236, 245, .14); border-radius: 999px; }
+
+.credits {
+  position: fixed;
+  left: 50%;
+  bottom: 66px;
+  transform: translateX(-50%);
+  z-index: 7;
+  width: min(460px, calc(100% - 32px));
+  padding: 1rem 1.3rem 1.1rem;
+  border: 1px solid rgba(217, 236, 245, .14);
+  border-radius: 14px;
+  background: rgba(3, 12, 20, .88);
+  backdrop-filter: blur(14px);
+  font-size: .8rem;
+  line-height: 1.6;
+  color: rgba(217, 236, 245, .8);
+}
+.credits h3 { font: 300 1.15rem var(--police-titre); letter-spacing: .1em; margin-bottom: .4rem; }
+.credits ul { list-style: none; }
+.credits a { color: var(--ecume); text-decoration: none; border-bottom: 1px solid rgba(217, 236, 245, .3); }
+.credits a:hover { border-bottom-color: var(--ecume); }
+.credits p { margin-top: .7rem; font-size: .72rem; color: var(--brume); }

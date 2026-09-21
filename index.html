@@ -78,6 +78,15 @@
   <!-- Les toasts (« Nouvelle espèce observée ») -->
   <div id="toasts" class="toasts" aria-live="polite"></div>
 
+  <!-- Le player : caché tant que l'audio n'a pas démarré (au clic sur « Entrer ») -->
+  <div id="player" class="player" hidden>
+    <button id="player-mute" class="player-btn player-mute" type="button" aria-label="Couper ou remettre le son">♪</button>
+    <span id="player-titre" class="player-titre"></span>
+    <input id="player-volume" class="player-volume" type="range" min="0" max="1" step="0.01" aria-label="Volume">
+    <button id="player-credits" class="player-btn player-lien" type="button">crédits</button>
+  </div>
+  <div id="credits" class="credits" hidden></div>
+
   <!-- Le carnet : bouton discret en bas à droite, panneau qui glisse depuis la droite -->
   <button id="btn-carnet" class="btn-carnet" type="button">Carnet <kbd>C</kbd></button>
   <aside id="carnet" class="carnet" aria-hidden="true">
