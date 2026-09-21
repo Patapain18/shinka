@@ -112,9 +112,9 @@ Les gros passent loin et lentement ; les petits, près et vite.
 | `requin-recif` | Requin gris de récif | peu commun | 1,8 m | toutes | ✅ colonne 5 os | premier modèle (2026-09-21) |
 | `tortue` | Tortue verte | peu commun | 1,2 m | aube-jour-crépuscule | ✅ 4 nageoires + cou + queue (`animer_os`) | lente, majestueuse |
 | `meduse` | Méduse lune | peu commun | 0,4 m | toutes, luit la nuit | ✅ échelle d'os (pulsation) + bras | translucide + émissif la nuit, ×2 |
-| `manta` | Raie manta | rare | 5 m (envergure) | jour | 2 chaînes d'os (ailes) | passe près, remplit l'écran |
+| `manta` | Raie manta | rare | 5 m (envergure) | aube-jour-crépuscule | ✅ ailes par loft `aile()`, 2 os par aile (battement déphasé) | passe près, remplit l'écran |
 | `requin-marteau` | Requin-marteau halicorne | rare | 3,2 m | crépuscule + nuit | ✅ colonne 5 os | tête en T |
-| `requin-baleine` | Requin-baleine | légendaire | 10 m | toutes | colonne 8-10 os | très lent, très loin, puis très près |
+| `requin-baleine` | Requin-baleine | légendaire | 10 m | toutes | ✅ colonne 5 os, cycle 6 s, damier de points par sommet | très lent, 8 à 18 m |
 
 ### v2 — candidats (quand la v1 tourne)
 
@@ -241,7 +241,8 @@ Debug : `?heure=23` fige l'heure, `?tempo=600` fait défiler une journée en 2 m
 - `outils/visionneuse.html?modele=<id>&vue=cote|face|dessus|trois-quarts&ambiance=atelier|bassin` —
   contrôle visuel (grille 1 m, axes : le museau doit pointer vers le bleu = +Z), animation jouée, infos à l'écran.
 - Leçon : **sans crease, la subdivision de surface fond les nageoires en boudins**. `nageoire()` plie le contour.
-- Faits : `requin-recif`, `chirurgien`, `requin-marteau` (colonne d'os, nage codée par `animer_nage`),
+- Faits (7) : `requin-recif`, `chirurgien`, `requin-marteau`, `requin-baleine` (colonne d'os, nage codée par `animer_nage`),
+  `manta` (ailes par `aile()` : loft de sections elliptiques le long de X, 2 os par aile, battement déphasé),
   `tortue` (squelette libre : cou, tête, 4 nageoires, queue ; nage par `animer_os` : battement + balayage en
   quadrature), `meduse` (cloche animée par ÉCHELLE d'os, bras sans héritage d'échelle, matériau translucide
   `alpha=0.45` double face, `emission` dans le catalogue → luit la nuit via `facteurNuit()` dans `animal.js`).
@@ -378,6 +379,9 @@ protocole DevTools : la page vit, on attend, on capture, et la console de la pag
 - `node outils/vignettes.mjs [id …]` — génère `models/<id>.png` (512×512, fond transparent, profil) pour le carnet.
   À relancer après chaque nouveau modèle. La silhouette « ??? » est la même image noircie en CSS.
 - `outils/chrome.mjs` — la bibliothèque commune (`piloter()` : naviguer, evaluer, souris, capturer).
+- `serveur.py` — le serveur local (utilisé par `lancer.command` et la config preview) : comme `http.server` mais
+  avec `Cache-Control: no-store`, sinon le navigateur garde de vieux modules après une mise à jour
+  (« does not provide an export named … »). En cas de doute : rechargement forcé (⌘⇧R).
 - `outils/visionneuse.html?modele=<id>` — contrôle d'un modèle (voir §7.0).
 - Modes d'URL du site : `?direct` (sans écran d'entrée), `?heure=23` / `?tempo=600` (horloge),
   `?demo=observer` (valide un animal toutes les 2,5 s + ligne de debug en haut à gauche),

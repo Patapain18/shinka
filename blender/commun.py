@@ -122,6 +122,31 @@ def corps_fusiforme(bm, profil, y_debut, y_fin, stations=30, segments=18, aplati
     return [pointe_avant, pointe_arriere] + [v for anneau in anneaux for v in anneau]
 
 
+def aile(bm, sections, segments=14):
+    """Une aile par « loft » de sections elliptiques le long de X, de l'emplanture
+    au bout : sections = [(x, y_avant, y_arriere, demi_epaisseur), …]. La dernière
+    section n'est qu'un point (la pointe). Pour l'aile gauche, donner des x négatifs.
+    Renvoie les sommets créés."""
+    anneaux = []
+    for x, y0, y1, e in sections[:-1]:
+        cy, ry = (y0 + y1) / 2, abs(y1 - y0) / 2
+        anneau = []
+        for k in range(segments):
+            a = 2 * math.pi * k / segments
+            anneau.append(bm.verts.new((x, cy + ry * math.cos(a), e * math.sin(a))))
+        anneaux.append(anneau)
+    xt, y0, y1, _ = sections[-1]
+    pointe = bm.verts.new((xt, (y0 + y1) / 2, 0.0))
+    n = segments
+    for A, B in zip(anneaux, anneaux[1:]):
+        for k in range(n):
+            bm.faces.new((A[k], A[(k + 1) % n], B[(k + 1) % n], B[k]))
+    for k in range(n):
+        bm.faces.new((anneaux[-1][k], anneaux[-1][(k + 1) % n], pointe))
+    bm.faces.new(list(reversed(anneaux[0])))        # l'emplanture, fermée (elle est dans le corps)
+    return [pointe] + [v for anneau in anneaux for v in anneau]
+
+
 def nageoire(bm, points, epaisseur, pli=1.0):
     """Une plaque fine : le polygone `points` (liste de (x, y, z) coplanaires)
     est dupliqué de part et d'autre de sa normale, puis refermé sur les côtés.

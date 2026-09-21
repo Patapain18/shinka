@@ -122,7 +122,8 @@ export function creerSpawner(scene, camera, horloge, { surEntree } = {}) {
   const forcee = ESPECES.find((e) => e.id === new URLSearchParams(location.search).get('forcer'));
   for (let i = 0; i < 2; i++) {
     const espece = forcee ?? tirer();
-    if (espece) faireEntrer(espece, THREE.MathUtils.randFloat(0.2, 0.6));
+    // forcée : en pleine vitre (0,4 et 0,6), pour qu'une capture la voie à coup sûr
+    if (espece) faireEntrer(espece, forcee ? 0.4 + 0.2 * i : THREE.MathUtils.randFloat(0.2, 0.6));
   }
 
   return {

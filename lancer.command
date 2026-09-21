@@ -9,7 +9,7 @@
 # Il faut donc un vrai serveur, même local.
 #
 # 1. se place dans le dossier du projet (où qu'il soit)
-# 2. démarre le serveur S'IL NE TOURNE PAS DÉJÀ (nohup + disown = survit au Terminal)
+# 2. démarre le serveur (serveur.py : sans cache navigateur) S'IL NE TOURNE PAS DÉJÀ
 # 3. ouvre le navigateur
 # ═══════════════════════════════════════════════════════════════
 
@@ -19,7 +19,7 @@ PORT=8792
 
 if ! lsof -i :$PORT >/dev/null 2>&1; then
   echo "Démarrage du serveur sur le port $PORT…"
-  nohup /usr/bin/python3 -m http.server $PORT >/dev/null 2>&1 &
+  nohup /usr/bin/python3 serveur.py $PORT >/dev/null 2>&1 &
   disown
   sleep 1
 else
