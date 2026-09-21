@@ -77,6 +77,9 @@ shinka/
 └── textures/           sable, caustiques, particules
 ```
 
+Raccourci de dev : `http://localhost:8792/?direct` saute l'écran d'entrée (utile pour itérer sur la scène
+et pour les captures automatiques en Chrome headless, le navigateur intégré de l'app n'ayant pas de WebGL).
+
 Principe : **`species.js` est de la donnée, tout le reste est du code générique**. Ajouter un animal
 = ajouter une entrée dans le catalogue + déposer son `.glb` et son `.png`. Rien d'autre à toucher.
 
@@ -318,7 +321,7 @@ Chaque étape donne quelque chose de visible et qui marche. On n'attaque pas la 
 
 | # | Étape | Résultat visible |
 |---|---|---|
-| 1 | Squelette : `index.html`, écran d'entrée, scène bleue avec brouillard + lumière, boucle, `lancer.command` | Un bassin vide, mais déjà « profond » |
+| 1 | ✅ 2026-09-21 — Squelette : `index.html`, écran d'entrée, scène bleue avec brouillard + lumière, boucle, `lancer.command` | Un bassin vide, mais déjà « profond » |
 | 2 | L'eau : rayons, particules, caustiques, sol | Beau sans aucun animal |
 | 3 | Placeholders : capsules qui traversent sur des trajectoires courbes ; spawner de base | Ça vit |
 | 4 | Catalogue + paliers de rareté + heure réelle (lumière qui suit l'heure) | Nuit ≠ jour |

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shinka — 進化</title>
+  <meta name="description" content="Face à la vitre. Regarde passer la vie.">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+
+  <!-- Import map : dit au navigateur où trouver « three » quand un module écrit
+       import * as THREE from 'three'. Sans ça il faudrait coller l'URL complète
+       dans chaque fichier. « three/addons/ » couvre tout ce qui vit dans examples/jsm/
+       (post-processing, GLTFLoader, etc.) — on s'en servira dès l'étape 3. -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+
+  <!-- La scène 3D. Elle tourne dès le chargement, DERRIÈRE l'écran d'entrée :
+       quand l'écran s'efface, le bassin est déjà vivant. -->
+  <canvas id="scene" aria-hidden="true"></canvas>
+
+  <!-- Écran d'entrée : opaque au départ, il s'efface au clic sur « Entrer ».
+       Il sert aussi à obtenir LE clic dont les navigateurs ont besoin avant
+       d'autoriser le son (étape 7). -->
+  <section id="entree" class="entree">
+    <div class="entree-contenu">
+      <p class="entree-kanji">進化</p>
+      <h1 class="entree-titre">Shinka</h1>
+      <p class="entree-sous-titre">Face à la vitre. Regarde passer la vie.</p>
+      <button id="btn-entrer" class="btn-entrer" type="button">Entrer</button>
+      <p class="entree-note">Casque conseillé</p>
+    </div>
+  </section>
+
+  <!-- type="module" : active import/export, et le script s'exécute une fois le HTML
+       parsé (pas besoin de defer ni d'attendre DOMContentLoaded). -->
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
