@@ -1,113 +1,145 @@
 """
-generer_requin_recif.py — le requin gris de récif (Carcharhinus amblyrhynchos)
-==============================================================================
+generer_requin_recif.py — le requin gris de récif (Carcharhinus amblyrhynchos), v2
+==================================================================================
 Lancer depuis la racine du projet :
   /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python blender/generer_requin_recif.py
 
-Résultat : models/requin-recif.glb (corps + nageoires, couleurs par sommet,
-squelette de 5 os, action « swim » de 2 s en boucle).
+Résultat : models/requin-recif.glb — 1,8 m, corps par loft super-elliptique
+(corps()), nageoires épaisses à profil d'aile (nageoire_loft()), peau calculée
+point par point (peau.py : couleur 2048², relief 1024², rugosité), colonne de
+6 os, action « swim » de 2 s.
 
-Pourquoi un script plutôt qu'un fichier .blend ? Reproductible (on relance, on
-obtient le même requin — ou un meilleur en changeant trois chiffres), lisible et
-versionnable dans git, et toutes les conventions de DESIGN.md §7 sont appliquées
-automatiquement.
+Ce qui fait un requin gris de récif, et où ça se voit ici :
+- museau modérément long, arrondi vu de dessus, APLATI (haut < bas dans les clés du corps) ;
+- bouche en croissant SOUS la tête, cinq fentes branchiales dont les deux
+  dernières au-dessus de la base des pectorales (peau : traits + rainures) ;
+- première dorsale haute et falciforme, à l'aplomb du bord interne des pectorales ;
+  seconde dorsale et anale petites, en face l'une de l'autre ;
+- pectorales grandes, en faucille ; caudale hétérocerque (lobe supérieur long,
+  encoche sous-terminale) avec sa LARGE BORDURE NOIRE postérieure : la signature
+  de l'espèce ; pointes des pectorales et de l'anale sombres ;
+- gris à reflet bronze sur le dos, blanc en dessous, la limite sur le flanc.
 """
-import sys, os
+import sys, os, math
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import bmesh
+import numpy as np
 from mathutils import Vector
 from commun import *
+from peau import *
+from requins import peau_requin
 
 nettoyer_scene()
+bm = nouveau_bmesh(zones=('corps', 'nageoires', 'caudale', 'yeux'))
 
 # ---------------------------------------------------------------- 1) le corps
-# 1,8 m du museau au bout de la queue. Tête vers -Y (DESIGN.md §7.2).
-Y_MUSEAU, Y_PEDONCULE = -0.90, 0.56
-# (t, demi-largeur, demi-hauteur) — t = 0 au museau, 1 au pédoncule caudal.
-# Un requin : museau pointu et aplati, corps le plus épais au tiers avant,
-# qui s'affine longuement vers la queue.
-PROFIL = [
-    (0.00, 0.006, 0.005),
-    (0.04, 0.045, 0.036),
-    (0.10, 0.082, 0.070),
-    (0.18, 0.112, 0.105),
-    (0.28, 0.132, 0.135),
-    (0.40, 0.140, 0.150),
-    (0.52, 0.130, 0.145),
-    (0.64, 0.110, 0.125),
-    (0.76, 0.085, 0.095),
-    (0.88, 0.060, 0.065),
-    (1.00, 0.040, 0.045),
+# (y, demi-largeur, haut, bas, centre_z) : 1,8 m du museau (-0,90) au bout de la caudale (+0,96).
+# La tête est déprimée (haut < bas, centre sous l'axe), le tronc est le plus épais
+# sous la première dorsale, le pédoncule caudal est fin et un peu relevé.
+CLES = [
+    (-0.900, 0.004, 0.003, 0.003, -0.028),
+    (-0.885, 0.028, 0.012, 0.012, -0.028),      # museau court, large et arrondi vu de dessus
+    (-0.860, 0.048, 0.020, 0.020, -0.026),
+    (-0.820, 0.066, 0.031, 0.030, -0.023),
+    (-0.760, 0.083, 0.044, 0.043, -0.018),
+    (-0.700, 0.093, 0.058, 0.056, -0.012),
+    (-0.620, 0.104, 0.075, 0.072, -0.006),
+    (-0.500, 0.117, 0.102, 0.095,  0.000),
+    (-0.380, 0.128, 0.126, 0.115,  0.002),
+    (-0.240, 0.135, 0.150, 0.130,  0.005),
+    (-0.080, 0.130, 0.148, 0.128,  0.005),
+    ( 0.080, 0.118, 0.135, 0.115,  0.005),
+    ( 0.240, 0.095, 0.110, 0.092,  0.005),
+    ( 0.380, 0.062, 0.076, 0.062,  0.006),
+    ( 0.480, 0.036, 0.048, 0.038,  0.008),
+    ( 0.550, 0.026, 0.040, 0.030,  0.010),
+    ( 0.610, 0.010, 0.020, 0.012,  0.014),
 ]
-bm = nouveau_bmesh()
-corps_fusiforme(bm, PROFIL, Y_MUSEAU, Y_PEDONCULE, stations=32, segments=20)
+corps(bm, CLES, anneaux=52, segments=28, exposant=2.2, zone='corps')
 
-# ---------------------------------------------------------------- 2) les nageoires
-# Polygones (x, y, z) dont la base est légèrement dans le corps. Épaisseurs en m.
-# Caudale hétérocerque : lobe supérieur long et relevé, lobe inférieur court, échancrure.
-nageoire(bm, [(0, 0.47, 0.04), (0, 0.62, 0.16), (0, 0.80, 0.32), (0, 0.94, 0.44), (0, 0.90, 0.30),
-              (0, 0.78, 0.12), (0, 0.76, 0.02), (0, 0.82, -0.08), (0, 0.78, -0.22), (0, 0.66, -0.15),
-              (0, 0.55, -0.06), (0, 0.47, -0.04)], 0.02)
-# Première dorsale : haute, en faucille, bord d'attaque bombé, bord de fuite concave
-nageoire(bm, [(0, -0.28, 0.08), (0, -0.22, 0.20), (0, -0.14, 0.31), (0, -0.04, 0.39), (0, 0.02, 0.40),
-              (0, 0.04, 0.33), (0, 0.06, 0.24), (0, 0.09, 0.16), (0, 0.12, 0.08)], 0.024)
-# Seconde dorsale et anale : petites, près de la queue
-nageoire(bm, [(0, 0.32, 0.05), (0, 0.40, 0.15), (0, 0.45, 0.14), (0, 0.47, 0.08), (0, 0.47, 0.03)], 0.016)
-nageoire(bm, [(0, 0.34, -0.04), (0, 0.42, -0.14), (0, 0.46, -0.12), (0, 0.48, -0.06), (0, 0.48, -0.02)], 0.016)
-# Pectorales (grandes ailes vers le bas et l'arrière) et pelviennes, à droite et à gauche
+# ---------------------------------------------------------------- 2) les nageoires (lofts épais)
+# Chaque nageoire : origine (dans le corps), direction d'envergure, direction de corde,
+# sections (s, bord d'attaque, bord de fuite, demi-épaisseur) — voir nageoire_loft().
+# Première dorsale : falciforme, haute (~20 cm au-dessus du dos), pointe libre arrière
+nageoire_loft(bm, (0, 0, 0.12), (0, 0, 1), (0, 1, 0), [
+    (0.00, -0.300, 0.100, 0.020), (0.04, -0.290, 0.050, 0.018), (0.07, -0.270, -0.010, 0.015),
+    (0.11, -0.240, -0.050, 0.012), (0.15, -0.200, -0.075, 0.009), (0.19, -0.155, -0.085, 0.006),
+    (0.22, -0.115, -0.085, 0.004), (0.24, -0.090, -0.085, 0.0)], segments=14, zone='nageoires')
+# Seconde dorsale et anale : petites, en vis-à-vis, pointe libre arrière
+nageoire_loft(bm, (0, 0, 0.07), (0, 0, 1), (0, 1, 0), [
+    (0.00, 0.290, 0.440, 0.010), (0.03, 0.300, 0.420, 0.009), (0.05, 0.315, 0.380, 0.007),
+    (0.08, 0.340, 0.375, 0.004), (0.10, 0.360, 0.370, 0.0)], segments=12, zone='nageoires')
+nageoire_loft(bm, (0, 0, -0.06), (0, 0, -1), (0, 1, 0), [
+    (0.00, 0.300, 0.460, 0.010), (0.03, 0.310, 0.440, 0.009), (0.05, 0.325, 0.400, 0.007),
+    (0.08, 0.350, 0.390, 0.004), (0.10, 0.370, 0.380, 0.0)], segments=12, zone='nageoires')
 for s in (+1, -1):
-    nageoire(bm, [(s * 0.09, -0.38, -0.03), (s * 0.20, -0.30, -0.08), (s * 0.44, -0.04, -0.19),
-                  (s * 0.36, 0.04, -0.15), (s * 0.18, -0.08, -0.07), (s * 0.09, -0.14, -0.05)], 0.02)
-    nageoire(bm, [(s * 0.05, 0.18, -0.04), (s * 0.12, 0.26, -0.10), (s * 0.16, 0.35, -0.12), (s * 0.05, 0.33, -0.04)], 0.014)
+    # Pectorales : grandes, falciformes, inclinées vers le bas et l'arrière
+    nageoire_loft(bm, (s * 0.10, 0, -0.04), (s * 1.0, 0.12, -0.45), (0, 1, 0), [
+        (0.00, -0.460, -0.120, 0.018), (0.04, -0.455, -0.150, 0.016), (0.09, -0.440, -0.210, 0.013),
+        (0.15, -0.400, -0.250, 0.010), (0.21, -0.345, -0.250, 0.008), (0.27, -0.280, -0.215, 0.005),
+        (0.31, -0.235, -0.185, 0.003), (0.33, -0.215, -0.175, 0.0)], segments=14, zone='nageoires')
+    # Pelviennes : petites, vers le bas et l'extérieur
+    nageoire_loft(bm, (s * 0.06, 0, -0.07), (s * 1.0, 0.35, -0.5), (0, 1, 0), [
+        (0.00, 0.160, 0.300, 0.008), (0.03, 0.170, 0.300, 0.007), (0.07, 0.200, 0.310, 0.005),
+        (0.11, 0.240, 0.320, 0.003), (0.14, 0.280, 0.320, 0.0)], segments=10, zone='nageoires')
+# Caudale hétérocerque : lobe supérieur long (37° au-dessus de l'axe) avec encoche
+# sous-terminale, lobe inférieur court (56° en dessous). La corde de chaque lobe va
+# de son bord d'attaque (dorsal / ventral) vers son bord de fuite (postérieur).
+nageoire_loft(bm, (0, 0.50, 0.0), (0, 0.80, 0.60), (0, 0.60, -0.80), [
+    (0.00, -0.060, 0.070, 0.020), (0.06, -0.050, 0.120, 0.017), (0.14, -0.045, 0.170, 0.014),
+    (0.24, -0.040, 0.180, 0.011), (0.34, -0.035, 0.150, 0.008), (0.42, -0.030, 0.100, 0.006),
+    (0.46, -0.025, 0.055, 0.005), (0.50, -0.020, 0.075, 0.004), (0.55, -0.010, 0.050, 0.002),
+    (0.58, 0.000, 0.020, 0.0)], segments=14, zone='caudale')
+nageoire_loft(bm, (0, 0.50, -0.01), (0, 0.55, -0.83), (0, 0.83, 0.55), [
+    (0.00, -0.050, 0.050, 0.018), (0.05, -0.045, 0.080, 0.014), (0.12, -0.040, 0.100, 0.011),
+    (0.20, -0.030, 0.080, 0.007), (0.26, -0.020, 0.050, 0.004), (0.30, -0.010, 0.020, 0.0)],
+    segments=12, zone='caudale')
 
-# Les yeux : deux petites sphères qui affleurent de chaque côté de la tête
-YEUX = [(+0.095, -0.66, 0.03), (-0.095, -0.66, 0.03)]
+# ---------------------------------------------------------------- 3) les yeux
+YEUX = [(+0.084, -0.705, 0.006), (-0.084, -0.705, 0.006)]      # affleurent la tête (9 mm dehors)
 for oeil in YEUX:
-    sphere(bm, oeil, 0.014)
+    marquer_zone(bm, sphere(bm, oeil, 0.016, segments=16, anneaux=10), 'yeux')
 
-requin = terminer_maillage(bm, 'Requin')
-
-# Subdivision de surface : arrondit le corps et les bords des nageoires.
-# Appliquée à l'export (export_apply), donc le .glb est déjà lissé.
+requin = terminer_maillage(bm, 'RequinRecif')
 sub = requin.modifiers.new('Subdivision', 'SUBSURF')
 sub.levels = sub.render_levels = 1
 
-# ---------------------------------------------------------------- 3) la peau
-def retouche(co, c):
-    for oeil in YEUX:                                # les yeux : presque noirs
-        if (co - Vector(oeil)).length < 0.02:
-            return [0.01, 0.01, 0.012]
-    if co.y > 0.84:                                  # bord de fuite de la caudale : sombre
-        return [x * 0.35 for x in c]
-    return c
+# ---------------------------------------------------------------- 4) la peau
+# La grammaire commune aux requins est dans requins.py ; ici, seulement les réglages
+# de l'espèce : couleurs, position des fentes, de la bouche, des narines, des yeux.
+couleur, hauteur, rugosite = peau_requin(dict(
+    dos=(0.40, 0.43, 0.44), bronze=(0.47, 0.45, 0.40), ventre=(0.90, 0.90, 0.87),
+    seuil_flanc=0.215, tete_grise=0.06,
+    ouies=dict(y0=-0.520, pas=0.030, x_min=0.075, z_centre=0.005, demi_hauteur=0.062, inclinaison=0.025),
+    bouche=dict(y_apex=-0.765, courbure=3.5, x_max=0.09),
+    narines=[(0.036, -0.855), (-0.036, -0.855)],
+    yeux=YEUX, pointes_sombres=1.0, liseret_dorsal=0.6, caudale_noire=1.0,
+))
+texturer(requin, 'Peau_RequinRecif', resolution=2048, resolution_relief=1024, resolution_orm=512,
+         couleur=couleur, hauteur=hauteur, rugosite=rugosite)
 
-colorer_ventre_dos(requin,
-                   dos=srgb(0.24, 0.29, 0.33),        # gris-bleu
-                   ventre=srgb(0.80, 0.82, 0.80),     # blanc cassé
-                   z_bas=-0.07, z_haut=0.07, retouche=retouche)
-requin.data.materials.append(materiau_peau('Peau_Requin', rugosite=0.55))
-
-# ---------------------------------------------------------------- 4) squelette et nage
-# Une colonne de 5 os : la racine au niveau des pectorales, la tête vers l'avant,
-# trois segments vers la queue. Les amplitudes croissent vers l'arrière et les
-# phases se décalent : l'onde part de la tête et court jusqu'à la caudale.
+# ---------------------------------------------------------------- 5) squelette et nage
+# Colonne de 6 os : la racine au niveau des pectorales, la tête en avant, quatre
+# segments vers la queue. Nage carangiforme : le tiers avant bouge à peine, l'amplitude
+# croît vers la caudale, l'onde court de l'avant vers l'arrière (phases décalées).
 OS = [
-    ('racine',  -0.30,  0.10, None),
+    ('racine',  -0.30,  0.05, None),
     ('tete',    -0.30, -0.90, 'racine'),
-    ('corps',    0.10,  0.42, 'racine'),
-    ('queue_1',  0.42,  0.68, 'corps'),
-    ('queue_2',  0.68,  0.95, 'queue_1'),
+    ('corps_1',  0.05,  0.30, 'racine'),
+    ('queue_1',  0.30,  0.50, 'corps_1'),
+    ('queue_2',  0.50,  0.72, 'queue_1'),
+    ('queue_3',  0.72,  0.98, 'queue_2'),
 ]
-armature = squelette_colonne('Armature_Requin', OS)
+armature = squelette_colonne('Armature_RequinRecif', OS)
 peser_colonne(requin, armature, OS)
 animer_nage(armature, {
-    'tete':    (0.030,  0.6),
-    'racine':  (0.035,  0.0),
-    'corps':   (0.090, -0.8),
-    'queue_1': (0.170, -1.6),
-    'queue_2': (0.250, -2.4),
+    'tete':    (0.025,  0.5),
+    'racine':  (0.020,  0.0),
+    'corps_1': (0.050, -0.7),
+    'queue_1': (0.100, -1.4),
+    'queue_2': (0.150, -2.1),
+    'queue_3': (0.200, -2.8),
 }, images=48)                                          # 48 images à 24 fps = un cycle de 2 s
 
-# ---------------------------------------------------------------- 5) export et contrôle
+# ---------------------------------------------------------------- 6) export et contrôle
 chemin = exporter_glb('requin-recif.glb')
 inspecter_glb(chemin)

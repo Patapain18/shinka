@@ -5,8 +5,12 @@ Chaque animal a son script `generer_<id>.py` qui décrit SA forme (profil du
 corps, nageoires, os, nage). Tout ce qui est générique vit ici :
 
   nettoyer_scene()        vide la scène par défaut de Blender
-  corps_fusiforme()       un corps « poisson » par anneaux le long de l'axe Y
+  corps_fusiforme()       un corps « poisson » par anneaux le long de l'axe Y (v1)
+  corps()                 le loft général : super-ellipses, Catmull-Rom, u/v (v2)
   nageoire()              une plaque fine à partir d'un polygone
+  nageoire_loft()         une nageoire épaisse à profil d'aile (v2)
+  revolution()            une surface de révolution (cloche, dôme) (v2)
+  marquer_zone()          étiquette de PEAU : zone + coordonnées u/v (v2, voir peau.py)
   terminer_maillage()     bmesh → objet Blender lissé
   colorer_ventre_dos()    couleurs par sommet : dos sombre, ventre clair
   materiau_peau()         un Principled BSDF qui lit ces couleurs
@@ -54,15 +58,235 @@ def _activer(obj):
 
 
 # ---------------------------------------------------------------- géométrie
-def nouveau_bmesh():
-    """Crée le bmesh ET ses couches de données (étiquette « partie », plis d'arêtes)
-    AVANT toute géométrie. Ajouter une couche après coup réorganise les données
-    internes : toutes les références Python aux sommets deviennent invalides
-    (« BMesh data … has been removed ») et l'ordre des sommets n'est plus fiable."""
+def nouveau_bmesh(zones=()):
+    """Crée le bmesh ET ses couches de données AVANT toute géométrie. Ajouter une
+    couche après coup réorganise les données internes : toutes les références
+    Python aux sommets deviennent invalides (« BMesh data … has been removed »)
+    et l'ordre des sommets n'est plus fiable.
+    Couches : « partie » (entier : l'os qui porte le sommet), « crease_edge »
+    (pli des arêtes), « u » et « v » (coordonnées « corps » : t le long du corps
+    et angle autour, ou envergure et corde d'une nageoire — la peau s'en sert
+    pour placer ses motifs), et une couche « zone_<nom> » par zone demandée
+    (1 = le sommet appartient à cette partie : corps, nageoires, yeux…)."""
     bm = bmesh.new()
     bm.verts.layers.int.new(COUCHE_PARTIE)
     bm.edges.layers.float.new('crease_edge')
+    bm.faces.layers.int.new('oriente')       # 1 = face construite déjà tournée vers l'extérieur (voir terminer_maillage)
+    bm.verts.layers.float.new('u')
+    bm.verts.layers.float.new('v')
+    for z in zones:
+        bm.verts.layers.float.new(f'zone_{z}')
     return bm
+
+
+def marquer_zone(bm, sommets, zone, u=None, v=None):
+    """Étiquette des sommets pour la PEAU (pas pour le rig, voir marquer()) :
+    zone = nom d'une zone passée à nouveau_bmesh(), u/v = coordonnées « corps »
+    optionnelles (une valeur pour tous, ou une liste alignée sur `sommets`)."""
+    couche = bm.verts.layers.float.get(f'zone_{zone}')
+    if couche is None:
+        raise KeyError(f"zone « {zone} » : la déclarer dans nouveau_bmesh(zones=…)")
+    cu, cv = bm.verts.layers.float.get('u'), bm.verts.layers.float.get('v')
+    for i, s in enumerate(sommets):
+        s[couche] = 1.0
+        if u is not None:
+            s[cu] = u[i] if hasattr(u, '__len__') else u
+        if v is not None:
+            s[cv] = v[i] if hasattr(v, '__len__') else v
+
+
+def _orienter(bm, faces):
+    """Marque des faces comme construites vers l'extérieur : terminer_maillage() ne
+    les confiera pas à recalc_face_normals(), qui se trompe sur les formes minces
+    (une nageoire à bord de fuite effilé : il retourne une partie des faces)."""
+    couche = bm.faces.layers.int.get('oriente')
+    if couche is not None:
+        for f in faces:
+            f[couche] = 1
+
+
+def _orienter_autour(bm, sommets):
+    """Idem pour toutes les faces qui touchent ces sommets (primitives bmesh.ops)."""
+    faces = set()
+    for v in sommets:
+        faces.update(v.link_faces)
+    _orienter(bm, faces)
+
+
+def _catmull(cles, t):
+    """Interpolation de Catmull-Rom : passe par chaque clé (x, valeurs…) avec une
+    courbe douce, sans les plats du smoothstep. cles triées par x ; t = un x."""
+    xs = [c[0] for c in cles]
+    if t <= xs[0]:
+        return list(cles[0][1:])
+    if t >= xs[-1]:
+        return list(cles[-1][1:])
+    i = max(j for j in range(len(xs) - 1) if xs[j] <= t)
+    p0, p1, p2, p3 = cles[max(i - 1, 0)], cles[i], cles[i + 1], cles[min(i + 2, len(cles) - 1)]
+    u = (t - p1[0]) / (p2[0] - p1[0])
+    res = []
+    for k in range(1, len(p1)):
+        a, b, c, d = p0[k], p1[k], p2[k], p3[k]
+        res.append(0.5 * ((2 * b) + (-a + c) * u + (2 * a - 5 * b + 4 * c - d) * u * u + (-a + 3 * b - 3 * c + d) * u ** 3))
+    return res
+
+
+def corps(bm, cles, anneaux=36, segments=24, exposant=2.0, zone=None):
+    """Loft général d'un corps le long de Y (tête vers -Y) : cles = [(y, demi_largeur,
+    haut, bas, centre_z), …] triées par y — haut = hauteur du dos au-dessus de
+    l'axe (centre_z), bas = profondeur du ventre. Chaque section est une
+    super-ellipse : exposant 2 = ellipse, 2.5-3 = flancs plus pleins (thon,
+    baleine), 1.5 = plus anguleux. Interpolation Catmull-Rom entre les clés,
+    anneaux resserrés aux deux bouts (là où la forme change vite).
+    Couches : u = position le long du corps (0 museau → 1 queue), v = angle
+    autour (0 = flanc droit +X, 0,25 = dos, 0,5 = flanc gauche, 0,75 = ventre).
+    Une clé de demi-largeur nulle aux bouts fait une pointe. Renvoie les sommets."""
+    y0, y1 = cles[0][0], cles[-1][0]
+    cu, cv = bm.verts.layers.float.get('u'), bm.verts.layers.float.get('v')
+    couche_zone = bm.verts.layers.float.get(f'zone_{zone}') if zone else None
+    rings = []
+    sommets = []
+    for i in range(1, anneaux):
+        s = i / anneaux
+        t = 0.5 - 0.5 * math.cos(math.pi * s)            # espacement en cosinus : dense aux extrémités
+        y = y0 + t * (y1 - y0)
+        rx, haut, bas, cz = _catmull(cles, y)[:4]
+        rx, haut, bas = max(rx, 1e-4), max(haut, 1e-4), max(bas, 1e-4)
+        ring = []
+        for k in range(segments):
+            a = 2 * math.pi * k / segments
+            ca, sa = math.cos(a), math.sin(a)
+            cs = math.copysign(abs(ca) ** (2 / exposant), ca)
+            sn = math.copysign(abs(sa) ** (2 / exposant), sa)
+            z = cz + (haut if sn >= 0 else bas) * sn
+            vtx = bm.verts.new((rx * cs, y, z))
+            vtx[cu], vtx[cv] = t, a / (2 * math.pi)
+            if couche_zone is not None:
+                vtx[couche_zone] = 1.0
+            ring.append(vtx)
+        rings.append(ring)
+        sommets += ring
+    avant = bm.verts.new((0.0, y0, cles[0][4]))
+    arriere = bm.verts.new((0.0, y1, cles[-1][4]))
+    for vtx, uu in ((avant, 0.0), (arriere, 1.0)):
+        vtx[cu], vtx[cv] = uu, 0.25
+        if couche_zone is not None:
+            vtx[couche_zone] = 1.0
+    n = segments
+    faces = []
+    # Ordre des sommets choisi pour que chaque face regarde DEHORS (règle de la main droite)
+    for k in range(n):
+        faces.append(bm.faces.new((avant, rings[0][k], rings[0][(k + 1) % n])))
+    for A, B in zip(rings, rings[1:]):
+        for k in range(n):
+            faces.append(bm.faces.new((A[k], B[k], B[(k + 1) % n], A[(k + 1) % n])))
+    for k in range(n):
+        faces.append(bm.faces.new((arriere, rings[-1][(k + 1) % n], rings[-1][k])))
+    _orienter(bm, faces)
+    return [avant, arriere] + sommets
+
+
+def _naca(c):
+    """Épaisseur relative d'un profil d'aile symétrique (NACA 00xx) le long de la
+    corde c ∈ [0,1] : bord d'attaque rond, bord de fuite effilé. Max ≈ 1 vers c = 0,3."""
+    return 5.0 * (0.2969 * math.sqrt(c) - 0.1260 * c - 0.3516 * c ** 2 + 0.2843 * c ** 3 - 0.1015 * c ** 4)
+
+
+def nageoire_loft(bm, origine, envergure, corde, sections, segments=12, zone=None, pointe=True):
+    """Une nageoire ÉPAISSE par loft de sections le long de l'envergure — une vraie
+    aile, pas une plaque : bord d'attaque rond, bord de fuite fin (profil NACA).
+    origine : point 3D de départ (dans le corps) ; envergure, corde : vecteurs
+    unitaires (de la racine vers le bout ; du bord d'attaque vers le bord de fuite).
+    sections = [(s, attaque, fuite, demi_epaisseur), …] : à la distance s le long
+    de l'envergure, le bord d'attaque est à `attaque` et le bord de fuite à `fuite`
+    le long de la corde (mesurés depuis l'origine). La dernière section donne le
+    bout : un point à mi-corde (pointe=True) ou une petite arête.
+    Couches : u = envergure (0 racine → 1 bout), v = corde (0 attaque → 1 fuite)."""
+    E, C = Vector(envergure).normalized(), Vector(corde).normalized()
+    Nn = E.cross(C).normalized()
+    O = Vector(origine)
+    cu, cv = bm.verts.layers.float.get('u'), bm.verts.layers.float.get('v')
+    couche_zone = bm.verts.layers.float.get(f'zone_{zone}') if zone else None
+    s_max = sections[-1][0]
+    for s, attaque, fuite, e in sections[:-1]:
+        if fuite <= attaque:                        # sinon la section est retournée : nageoire à l'envers
+            raise ValueError(f"nageoire_loft : à s={s}, bord de fuite ({fuite}) ≤ bord d'attaque ({attaque})")
+    rings = []
+    sommets = []
+    for s, attaque, fuite, e in sections[:-1]:
+        ring = []
+        for k in range(segments):
+            a = 2 * math.pi * k / segments
+            c = (1 - math.cos(a)) / 2                     # 0 au bord d'attaque, 1 au bord de fuite
+            ep = e * _naca(c) * math.sin(a)               # + dessus, - dessous
+            pos = O + E * s + C * (attaque + c * (fuite - attaque)) + Nn * ep
+            vtx = bm.verts.new(pos)
+            vtx[cu], vtx[cv] = s / s_max, c
+            if couche_zone is not None:
+                vtx[couche_zone] = 1.0
+            ring.append(vtx)
+        rings.append(ring)
+        sommets += ring
+    s, attaque, fuite, _ = sections[-1]
+    bout = bm.verts.new(O + E * s + C * ((attaque + fuite) / 2))
+    bout[cu], bout[cv] = 1.0, 0.5
+    if couche_zone is not None:
+        bout[couche_zone] = 1.0
+    n = segments
+    faces = []
+    for A, B in zip(rings, rings[1:]):
+        for k in range(n):
+            faces.append(bm.faces.new((A[k], B[k], B[(k + 1) % n], A[(k + 1) % n])))
+    for k in range(n):
+        faces.append(bm.faces.new((rings[-1][(k + 1) % n], rings[-1][k], bout)))
+    faces.append(bm.faces.new(list(reversed(rings[0]))))      # l'emplanture, fermée (elle est dans le corps)
+    _orienter(bm, faces)
+    return [bout] + sommets
+
+
+def revolution(bm, profil, segments=32, centre=(0.0, 0.0, 0.0), zone=None):
+    """Surface de révolution autour de Z : profil = [(rayon, z), …] du haut vers le
+    bas (une cloche de méduse, un œil, un dôme). Un rayon nul fait un pôle.
+    Couches : u = position le long du profil (0 → 1), v = angle."""
+    cu, cv = bm.verts.layers.float.get('u'), bm.verts.layers.float.get('v')
+    couche_zone = bm.verts.layers.float.get(f'zone_{zone}') if zone else None
+    cx, cy, cz = centre
+    rings = []
+    sommets = []
+    for i, (r, z) in enumerate(profil):
+        uu = i / (len(profil) - 1)
+        if r < 1e-5:
+            vtx = bm.verts.new((cx, cy, cz + z))
+            vtx[cu], vtx[cv] = uu, 0.0
+            if couche_zone is not None:
+                vtx[couche_zone] = 1.0
+            rings.append([vtx])
+            sommets.append(vtx)
+            continue
+        ring = []
+        for k in range(segments):
+            a = 2 * math.pi * k / segments
+            vtx = bm.verts.new((cx + r * math.cos(a), cy + r * math.sin(a), cz + z))
+            vtx[cu], vtx[cv] = uu, a / (2 * math.pi)
+            if couche_zone is not None:
+                vtx[couche_zone] = 1.0
+            ring.append(vtx)
+        rings.append(ring)
+        sommets += ring
+    n = segments
+    faces = []
+    for A, B in zip(rings, rings[1:]):
+        if len(A) == 1:
+            for k in range(n):
+                faces.append(bm.faces.new((A[0], B[k], B[(k + 1) % n])))
+        elif len(B) == 1:
+            for k in range(n):
+                faces.append(bm.faces.new((A[(k + 1) % n], A[k], B[0])))
+        else:
+            for k in range(n):
+                faces.append(bm.faces.new((A[(k + 1) % n], A[k], B[k], B[(k + 1) % n])))
+    _orienter(bm, faces)
+    return sommets
 
 
 def lisser(t):
@@ -154,15 +378,21 @@ def nageoire(bm, points, epaisseur, pli=1.0):
     Les arêtes du contour reçoivent un « pli » (crease) : sans ça, la subdivision
     de surface fond une plaque fine en boudin."""
     pts = [Vector(p) for p in points]
-    normale = (pts[1] - pts[0]).cross(pts[2] - pts[0]).normalized()
+    # Normale de Newell : celle du sens de parcours du polygone entier (fiable même concave)
+    normale = Vector((0.0, 0.0, 0.0))
+    for a, b in zip(pts, pts[1:] + pts[:1]):
+        normale += a.cross(b)
+    normale.normalize()
     dessus = [bm.verts.new(p + normale * epaisseur / 2) for p in pts]
     dessous = [bm.verts.new(p - normale * epaisseur / 2) for p in pts]
     face_dessus = bm.faces.new(dessus)
     face_dessous = bm.faces.new(list(reversed(dessous)))
+    faces = [face_dessus, face_dessous]
     m = len(pts)
     for i in range(m):
         j = (i + 1) % m
-        bm.faces.new((dessus[i], dessus[j], dessous[j], dessous[i]))
+        faces.append(bm.faces.new((dessus[i], dessous[i], dessous[j], dessus[j])))
+    _orienter(bm, faces)
     couche_pli = bm.edges.layers.float.get('crease_edge')   # créée par nouveau_bmesh()
     for face in (face_dessus, face_dessous):
         for e in face.edges:
@@ -179,6 +409,7 @@ def ellipsoide(bm, centre, rayons, segments=24, anneaux=16, aplatir_dessous=1.0)
         if z < 0:
             z *= aplatir_dessous
         v.co = (centre[0] + x, centre[1] + y, centre[2] + z)
+    _orienter_autour(bm, res['verts'])
     return res['verts']
 
 
@@ -187,6 +418,7 @@ def sphere(bm, centre, rayon, segments=12, anneaux=8):
     res = bmesh.ops.create_uvsphere(bm, u_segments=segments, v_segments=anneaux, radius=rayon)
     for v in res['verts']:
         v.co += Vector(centre)
+    _orienter_autour(bm, res['verts'])
     return res['verts']
 
 
@@ -194,8 +426,18 @@ def terminer_maillage(bm, nom):
     """bmesh → objet Blender lissé, ajouté à la scène. L'ordre des sommets est
     conservé : les indices relevés pendant la construction restent valables."""
     bm.verts.index_update()
-    bmesh.ops.triangulate(bm, faces=[f for f in bm.faces if len(f.verts) > 4])   # n-gones concaves → triangles
-    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    couche = bm.faces.layers.int.get('oriente')
+    deja = {f for f in bm.faces if couche is not None and f[couche] == 1}
+    res = bmesh.ops.triangulate(bm, faces=[f for f in bm.faces if len(f.verts) > 4])   # n-gones concaves → triangles
+    if couche is not None:                       # les triangles issus d'une face marquée héritent de la marque
+        for f in res['faces']:
+            if f[couche] == 1:
+                deja.add(f)
+    # recalc_face_normals se trompe sur les formes minces : on ne lui donne que les faces
+    # dont l'orientation n'a pas été fixée à la construction (anciennes primitives)
+    a_recalculer = [f for f in bm.faces if f not in deja]
+    if a_recalculer:
+        bmesh.ops.recalc_face_normals(bm, faces=a_recalculer)
     me = bpy.data.meshes.new(nom)
     bm.to_mesh(me)
     bm.free()
@@ -307,18 +549,33 @@ def marquer(bm, sommets, nom_os, registre, fondu=None):
         v[couche] = etiquette
 
 
-def peser_par_parties(obj, arm, os_defs, registre):
+def peser_par_parties(obj, arm, os_defs, registre, colonne=None, recouvrement=1.5):
     """Lit l'étiquette « partie » de chaque sommet et lui donne le poids de son os
-    (avec fondu vers le parent près de la jonction). Voir marquer()."""
+    (avec fondu vers le parent près de la jonction). Voir marquer().
+    colonne = [(nom_os, y_debut, y_fin), …] : les sommets SANS étiquette (le corps)
+    sont pesés comme dans peser_colonne(), en tente le long de Y — pratique quand
+    seules les nageoires ont leurs propres os."""
     me = obj.data
     attr = me.attributes.get(COUCHE_PARTIE)
     if attr is None:
         raise RuntimeError("aucune étiquette « partie » : appeler marquer() pendant la construction")
     groupes = {nom: obj.vertex_groups.new(name=nom) for nom, _, _, _ in os_defs}
     parents = {nom: parent for nom, _, _, parent in os_defs}
+    infos = [(nom, (y0 + y1) / 2, abs(y1 - y0) / 2) for nom, y0, y1 in (colonne or [])]
     for i, v in enumerate(me.vertices):
         etiquette = attr.data[i].value
         if etiquette == 0:
+            if infos:
+                poids = {}
+                for nom, yc, demi in infos:
+                    w = max(0.0, 1.0 - abs(v.co.y - yc) / (demi * recouvrement))
+                    if w > 0:
+                        poids[nom] = w
+                if not poids:
+                    poids = {min(infos, key=lambda o: abs(v.co.y - o[1]))[0]: 1.0}
+                total = sum(poids.values())
+                for nom, w in poids.items():
+                    groupes[nom].add([i], w / total, 'REPLACE')
             continue
         nom_os, fondu = registre[etiquette - 1]
         w = 1.0
@@ -335,9 +592,11 @@ def peser_par_parties(obj, arm, os_defs, registre):
 
 
 def animer_os(arm, pistes, images=48, nom_action='swim', pas=2):
-    """Animation générique : pistes = {nom_os: [(canal, axe, amplitude, phase, base), …]}
+    """Animation générique : pistes = {nom_os: [(canal, axe, amplitude, phase, base[, forme]), …]}
     avec canal ∈ 'rotation_euler' | 'scale' | 'location', axe ∈ 0 (X) | 1 (Y) | 2 (Z).
-    Chaque valeur = base + amplitude × sin(t + phase). Boucle propre (image 1 = image images+1)."""
+    Chaque valeur = base + amplitude × forme(t + phase), forme = sin par défaut —
+    ou toute fonction périodique 2π → [-1, 1] (une méduse se contracte vite et se
+    relâche lentement : ce n'est pas un sinus). Boucle propre (image 1 = image images+1)."""
     scene = bpy.context.scene
     scene.frame_start = 1
     scene.frame_end = images
@@ -349,8 +608,10 @@ def animer_os(arm, pistes, images=48, nom_action='swim', pas=2):
         t = 2 * math.pi * (f - 1) / images
         for nom, canaux in pistes.items():
             pb = arm.pose.bones[nom]
-            for canal, axe, amplitude, phase, base in canaux:
-                valeur = base + amplitude * math.sin(t + phase)
+            for piste in canaux:
+                canal, axe, amplitude, phase, base = piste[:5]
+                forme = piste[5] if len(piste) > 5 else math.sin
+                valeur = base + amplitude * forme(t + phase)
                 getattr(pb, canal)[axe] = valeur
                 pb.keyframe_insert(canal, index=axe, frame=f)
     bpy.ops.object.mode_set(mode='OBJECT')
@@ -421,7 +682,8 @@ def exporter_glb(nom_fichier):
     base = dict(filepath=chemin, export_format='GLB', export_apply=True, export_yup=True,
                 export_animations=True, export_skins=True, export_normals=True,
                 export_texcoords=True, export_materials='EXPORT', export_frame_range=True,
-                export_force_sampling=True)
+                export_force_sampling=True, export_tangents=True, export_image_format='AUTO',
+                export_jpeg_quality=90)
     variantes = [
         dict(base, export_animation_mode='ACTIONS', export_vertex_color='ACTIVE'),
         dict(base, export_animation_mode='ACTIONS'),
@@ -455,6 +717,14 @@ def inspecter_glb(chemin):
             print(f"  mesh « {m.get('name')} » : {tris} triangles, attributs {sorted(p['attributes'])}")
             if mn and mx:
                 print(f"    étendue (m) : X {mn[0]:.2f}→{mx[0]:.2f}  Y {mn[1]:.2f}→{mx[1]:.2f}  Z {mn[2]:.2f}→{mx[2]:.2f}")
+    for img in j.get('images', []):
+        bv = j['bufferViews'][img['bufferView']] if 'bufferView' in img else None
+        print(f"  image « {img.get('name')} » : {img.get('mimeType')}, {bv['byteLength'] // 1024 if bv else '?'} Ko")
+    for m in j.get('materials', []):
+        pbr = m.get('pbrMetallicRoughness', {})
+        print(f"  matériau « {m.get('name')} » : couleur {'texture' if 'baseColorTexture' in pbr else 'unie'}, "
+              f"normales {'oui' if 'normalTexture' in m else 'non'}, rugosité {'texture' if 'metallicRoughnessTexture' in pbr else pbr.get('roughnessFactor')}, "
+              f"alpha {m.get('alphaMode', 'OPAQUE')}{', émission' if 'emissiveTexture' in m else ''}")
     print("  nœuds :", [n.get('name') for n in j.get('nodes', [])])
     print("  skins :", [len(s['joints']) for s in j.get('skins', [])], "os")
     for a in j.get('animations', []):
