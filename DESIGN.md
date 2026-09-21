@@ -227,6 +227,22 @@ forcer une heure pour tester sans attendre minuit.
 > `Blender --background --factory-startup --python …`). Les conventions ci-dessous restent la règle : le script
 > les applique, et elles servent aussi si un jour un modèle vient d'ailleurs (asset CC0, modèle fait main).
 
+### 7.0 Comment on fabrique un animal (état au 2026-09-21)
+
+```bash
+/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python blender/generer_requin_recif.py
+```
+
+- `blender/commun.py` — la boîte à outils : `corps_fusiforme` (corps par anneaux), `nageoire` (plaque fine
+  avec *crease* sur le contour), `sphere` (yeux), `colorer_ventre_dos` (couleurs par sommet), `materiau_peau`,
+  `squelette_colonne`, `peser_colonne` (poids calculés à la main), `animer_nage` (action `swim`),
+  `exporter_glb`, `inspecter_glb` (relit le fichier et résume : triangles, étendue, os, animations).
+- `blender/generer_<id>.py` — la recette d'UNE espèce : profil du corps, polygones des nageoires, os, amplitudes.
+- `outils/visionneuse.html?modele=<id>&vue=cote|face|dessus|trois-quarts&ambiance=atelier|bassin` —
+  contrôle visuel (grille 1 m, axes : le museau doit pointer vers le bleu = +Z), animation jouée, infos à l'écran.
+- Leçon : **sans crease, la subdivision de surface fond les nageoires en boudins**. `nageoire()` plie le contour.
+- Fait : `requin-recif` (253 Ko, 7 292 triangles, 5 os, `swim` 2 s).
+
 ### 7.1 Unités et échelle
 - **1 unité Blender = 1 mètre.** Modélise à la vraie taille (requin 1,8 m, sardine 0,2 m).
   `Scene Properties → Units → Metric, Unit Scale 1.0`.
@@ -330,11 +346,11 @@ Chaque étape donne quelque chose de visible et qui marche. On n'attaque pas la 
 | 5 | Observation : raycast, jauge, halo, toasts ; collection localStorage | Le cœur du site |
 | 6 | Carnet : panneau, grille, fiches, silhouettes | On peut « collectionner » |
 | 7 | Audio : playlist, fondu, ambiance, sons, player, crédits | L'ambiance est là |
-| 8 | **Premier vrai modèle** (requin gris) : chargement GLB, `AnimationMixer`, remplacement du placeholder | Le pipeline Blender est validé |
+| 8 | ~~Premier vrai modèle~~ → fusionné dans l'étape 3 : le requin généré (`models/requin-recif.glb`) est disponible dès maintenant, plus besoin de placeholders | ✅ pipeline validé le 2026-09-21 |
 | 9 | Événements rares (banc, géant, trouble) | Les surprises |
 | 10 | Polish : post-processing, vitre, perf, version tablette/mobile minimale, déploiement GitHub Pages | En ligne |
 
-L'étape 8 peut remonter dès que le premier `.glb` existe — le loader sera prêt dès l'étape 3.
+Le premier `.glb` existe déjà : l'étape 3 charge directement le requin (GLTFLoader + AnimationMixer).
 
 ---
 
