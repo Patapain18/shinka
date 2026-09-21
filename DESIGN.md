@@ -296,8 +296,9 @@ Glisse le `.glb` sur **https://gltf-viewer.donmccurdy.com/** : il doit s'affiche
 et la liste des animations à droite doit contenir `swim` et jouer en boucle. Si c'est bon là, c'est bon dans le site.
 
 ### 7.8 L'image du carnet
-Un rendu Blender de profil, fond transparent, **`models/<id>.png` en 512×512**.
-La même image sert pour la silhouette (« ??? ») via un filtre CSS, et pour la fiche débloquée.
+Générée automatiquement : `node outils/vignettes.mjs <id>` (visionneuse en mode `?vignette`, fond transparent,
+profil, pose neutre) → **`models/<id>.png` en 512×512**. La même image sert pour la silhouette (« ??? »)
+via un filtre CSS, et pour la fiche débloquée.
 
 ---
 
@@ -344,7 +345,7 @@ Chaque étape donne quelque chose de visible et qui marche. On n'attaque pas la 
 | 3 | ✅ 2026-09-21 — Les animaux : catalogue (`species.js`), chargeur + clonage de squelette (`modeles.js`), classe `Animal` (courbe Catmull-Rom + `AnimationMixer`), spawner de base, barre de chargement | Ça vit |
 | 4 | ✅ 2026-09-21 — `daytime.js` (heure réelle → 8 repères de lumière interpolés, `?heure=` / `?tempo=`), spawner pondéré + heures + repos + pitié + groupes, HUD heure/phase, espèces `chirurgien` (commun, jour, ×4) et `requin-marteau` (rare, crépuscule/nuit) | Nuit ≠ jour |
 | 5 | ✅ 2026-09-21 — `observe.js` (sphère englobante ×1,3, jauge 2-3,5 s, vidage 0,5 s), `collection.js` (localStorage `shinka.v1`), `ui.js` (curseur-anneau SVG, toasts par rareté, compteur HUD), halo émissif par instance (`animal.js`) | Le cœur du site |
-| 6 | Carnet : panneau, grille, fiches, silhouettes | On peut « collectionner » |
+| 6 | ✅ 2026-09-21 — `carnet.js` (panneau touche C / bouton, grille triée par rareté, silhouettes CSS, fiches complètes), vignettes générées par `outils/vignettes.mjs` (visionneuse `?vignette`), observation en pause quand le carnet est ouvert | On peut « collectionner » |
 | 7 | Audio : playlist, fondu, ambiance, sons, player, crédits | L'ambiance est là |
 | 8 | ~~Premier vrai modèle~~ → fusionné dans l'étape 3 : le requin généré (`models/requin-recif.glb`) est disponible dès maintenant, plus besoin de placeholders | ✅ pipeline validé le 2026-09-21 |
 | 9 | Événements rares (banc, géant, trouble) | Les surprises |
@@ -363,6 +364,9 @@ protocole DevTools : la page vit, on attend, on capture, et la console de la pag
 - `node outils/capture.mjs "<url>" sortie.png [attente_s]` — une capture après N secondes de vie.
 - `node outils/test-observation.mjs sortie.png` — scénario bout-en-bout : la souris suit un animal
   3,5 s, on vérifie compteur + toast. Écrit aussi `sortie-jauge.png` (anneau en cours).
+- `node outils/test-carnet.mjs sortie.png` — scénario : touche C, capture de la grille, ouverture d'une fiche.
+- `node outils/vignettes.mjs [id …]` — génère `models/<id>.png` (512×512, fond transparent, profil) pour le carnet.
+  À relancer après chaque nouveau modèle. La silhouette « ??? » est la même image noircie en CSS.
 - `outils/chrome.mjs` — la bibliothèque commune (`piloter()` : naviguer, evaluer, souris, capturer).
 - `outils/visionneuse.html?modele=<id>` — contrôle d'un modèle (voir §7.0).
 - Modes d'URL du site : `?direct` (sans écran d'entrée), `?heure=23` / `?tempo=600` (horloge),

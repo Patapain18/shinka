@@ -24,6 +24,7 @@ export function creerObservation({ camera, animauxVisibles, ui, surObservation }
 
   let cible = null;          // l'animal sous le curseur (ou celui qu'on vient de quitter)
   let progression = 0;       // 0 → 1
+  let actif = true;          // faux quand le carnet est ouvert : on ne « regarde » plus le bassin
 
   window.addEventListener('pointermove', (e) => {
     souris.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -60,8 +61,12 @@ export function creerObservation({ camera, animauxVisibles, ui, surObservation }
 
   return {
     valider,   // exposé pour le mode démo
+    actif(oui) {
+      actif = oui;
+      if (!oui) { cible = null; progression = 0; ui.curseur.progression(0); ui.curseur.survol(false); }
+    },
     maj(dt) {
-      const dessus = sourisDedans ? animalSousCurseur() : null;
+      const dessus = (actif && sourisDedans) ? animalSousCurseur() : null;
       ui.curseur.survol(dessus !== null);
 
       if (dessus && dessus !== cible) {          // nouvel animal : on repart de zéro

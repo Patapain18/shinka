@@ -13,6 +13,8 @@
   <style>
     body { margin: 0; background: #03111d; color: #d9ecf5; font: 13px/1.5 Inter, system-ui, sans-serif; overflow: hidden; }
     canvas { display: block; }
+    body.vignette { background: transparent; }
+    body.vignette #infos { display: none; }
     #infos { position: fixed; top: 12px; left: 12px; padding: 10px 14px; white-space: pre-wrap; max-width: 60ch;
              background: rgba(2, 7, 12, .7); border: 1px solid rgba(217, 236, 245, .15); border-radius: 8px; }
   </style>
@@ -34,13 +36,15 @@
     const nomAnim  = params.get('anim')     || 'swim';
     const vue      = params.get('vue')      || 'trois-quarts';
     const ambiance = params.get('ambiance') || 'atelier';
+    const vignette = params.has('vignette');   // image pour le carnet : fond transparent, profil, sans repères
 
     const infos = document.getElementById('infos');
     const log = (...a) => { infos.textContent += '\n' + a.join(' '); };
     window.addEventListener('error', e => log('ERREUR', e.message));
     window.addEventListener('unhandledrejection', e => log('REJET', e.reason));
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: vignette });
+    if (vignette) { renderer.setClearColor(0x000000, 0); document.body.classList.add('vignette'); }
     renderer.setSize(innerWidth, innerHeight);
     renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -48,10 +52,10 @@
 
     const scene = new THREE.Scene();
     const bassin = ambiance === 'bassin';
-    scene.background = new THREE.Color(bassin ? 0x03111d : 0x0b1a26);
+    scene.background = vignette ? null : new THREE.Color(bassin ? 0x03111d : 0x0b1a26);
     if (bassin) scene.fog = new THREE.FogExp2(0x03111d, 0.055);
 
-    const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.05, 200);
+    const camera = new THREE.PerspectiveCamera(vignette ? 30 : 45, innerWidth / innerHeight, 0.05, 200);
     const VUES = { 'trois-quarts': [2.6, 1.3, 2.6], cote: [3.6, 0.25, 0], face: [0, 0.3, 3.6], dessus: [0.01, 4, 0] };
     camera.position.fromArray(VUES[vue] || VUES['trois-quarts']);
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -59,16 +63,23 @@
     controls.update();
 
     // Même recette de lumière que scene.js, plus une contre-lumière pour lire les formes
-    const soleil = new THREE.DirectionalLight(0x9fd4ff, bassin ? 2.6 : 3.0);
-    soleil.position.set(2, 8, -3);
-    const contre = new THREE.DirectionalLight(0x3b6f8f, 1.2);
-    contre.position.set(-4, 2, 3);
-    scene.add(soleil, contre, new THREE.HemisphereLight(0x0e3a5c, 0x000000, bassin ? 0.9 : 1.6));
+    if (vignette) {
+      // Éclairage de vignette : neutre et lisible, la lumière principale vient du côté de la caméra
+      const cle = new THREE.DirectionalLight(0xe4eef8, 3.4); cle.position.set(4, 3, 1.5);
+      const debouche = new THREE.DirectionalLight(0x8fb4d4, 1.4); debouche.position.set(-3, 1, -3);
+      scene.add(cle, debouche, new THREE.HemisphereLight(0xc8dcec, 0x243240, 1.3));
+    } else {
+      const soleil = new THREE.DirectionalLight(0x9fd4ff, bassin ? 2.6 : 3.0);
+      soleil.position.set(2, 8, -3);
+      const contre = new THREE.DirectionalLight(0x3b6f8f, 1.2);
+      contre.position.set(-4, 2, 3);
+      scene.add(soleil, contre, new THREE.HemisphereLight(0x0e3a5c, 0x000000, bassin ? 0.9 : 1.6));
+    }
 
     // Grille de 1 m et axes : rouge = X, vert = Y, bleu = Z. Le museau doit pointer vers le BLEU.
     const grille = new THREE.GridHelper(10, 10, 0x2a4a5c, 0x16303d);
     grille.position.y = -0.5;
-    scene.add(grille, new THREE.AxesHelper(1));
+    if (!vignette) scene.add(grille, new THREE.AxesHelper(1));
 
     let mixer = null;
     new GLTFLoader().load(`../models/${modele}.glb`, (gltf) => {
@@ -79,11 +90,15 @@
       const centre = boite.getCenter(new THREE.Vector3());
       const rayon = taille.length() / 2;
       const direction = camera.position.clone().normalize();
-      camera.position.copy(centre).add(direction.multiplyScalar(rayon * 2.8));
+      // Vignette : vue de profil → l'image doit contenir la longueur (Z) et la hauteur (Y) du modèle,
+      // avec 12 % de marge. Distance = demi-étendue / tan(fov/2). Sinon : la sphère englobante suffit.
+      const demiEtendue = Math.max(taille.z, taille.y) / 2 * 1.12;
+      const distance = vignette ? demiEtendue / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) + taille.x / 2 : rayon * 2.8;
+      camera.position.copy(centre).add(direction.multiplyScalar(distance));
       camera.near = rayon / 50; camera.far = rayon * 200; camera.updateProjectionMatrix();
       controls.target.copy(centre); controls.update();
       grille.position.y = boite.min.y - 0.01;
-      if (rayon < 0.6) {                                   // petit modèle : grille fine de 10 cm en plus
+      if (rayon < 0.6 && !vignette) {                      // petit modèle : grille fine de 10 cm en plus
         const fine = new THREE.GridHelper(2, 20, 0x2a4a5c, 0x16303d);
         fine.position.copy(grille.position);
         scene.add(fine);
@@ -95,7 +110,8 @@
       log(`triangles : ${Math.round(triangles)}`);
       log(`animations : ${gltf.animations.map(a => `${a.name} (${a.duration.toFixed(2)} s)`).join(', ') || 'aucune'}`);
       const clip = THREE.AnimationClip.findByName(gltf.animations, nomAnim);
-      if (clip) { mixer = new THREE.AnimationMixer(gltf.scene); mixer.clipAction(clip).play(); log(`lecture : ${nomAnim}`); }
+      // vignette : pose neutre, pas d'animation
+      if (clip && !vignette) { mixer = new THREE.AnimationMixer(gltf.scene); mixer.clipAction(clip).play(); log(`lecture : ${nomAnim}`); }
       else log(`⚠ pas d'animation « ${nomAnim} »`);
     }, undefined, (err) => log('ERREUR de chargement :', err.message || err));
 

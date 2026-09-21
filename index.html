@@ -78,6 +78,18 @@
   <!-- Les toasts (« Nouvelle espèce observée ») -->
   <div id="toasts" class="toasts" aria-live="polite"></div>
 
+  <!-- Le carnet : bouton discret en bas à droite, panneau qui glisse depuis la droite -->
+  <button id="btn-carnet" class="btn-carnet" type="button">Carnet <kbd>C</kbd></button>
+  <aside id="carnet" class="carnet" aria-hidden="true">
+    <header class="carnet-entete">
+      <h2 class="carnet-titre">Carnet</h2>
+      <span id="carnet-compte" class="carnet-compte"></span>
+      <button id="carnet-fermer" class="carnet-fermer" type="button" aria-label="Fermer le carnet">×</button>
+    </header>
+    <div id="carnet-grille" class="carnet-grille"></div>
+    <article id="carnet-fiche" class="carnet-fiche" hidden></article>
+  </aside>
+
   <!-- type="module" : active import/export, et le script s'exécute une fois le HTML
        parsé (pas besoin de defer ni d'attendre DOMContentLoaded). -->
   <script type="module" src="js/main.js"></script>

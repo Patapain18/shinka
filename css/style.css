@@ -20,6 +20,9 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* L'attribut hidden doit gagner sur nos display: grid / flex (la règle du navigateur est trop faible) */
+[hidden] { display: none !important; }
+
 html, body {
   height: 100%;
   overflow: hidden;              /* pas de scroll : le site est un lieu, pas une page */
@@ -270,3 +273,121 @@ body.entre { cursor: none; }
 }
 
 #debug { position: fixed; top: 12px; left: 12px; z-index: 30; padding: 6px 10px; background: rgba(0,0,0,.7); color: #9f9; font: 12px/1.4 monospace; white-space: pre-wrap; max-width: 90vw; }
+
+/* ---------- Le carnet ---------- */
+.btn-carnet {
+  position: fixed;
+  right: 24px;
+  bottom: 18px;
+  z-index: 7;
+  padding: .5rem .9rem;
+  background: transparent;
+  color: rgba(217, 236, 245, .55);
+  border: 1px solid rgba(217, 236, 245, .18);
+  border-radius: 999px;
+  font: 400 .68rem var(--police-ui);
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color .3s, border-color .3s;
+}
+.btn-carnet:hover, .btn-carnet:focus-visible { color: var(--ecume); border-color: rgba(217, 236, 245, .5); outline: none; }
+.btn-carnet kbd {
+  margin-left: .5em;
+  padding: .1em .4em;
+  border: 1px solid rgba(217, 236, 245, .25);
+  border-radius: 4px;
+  font: inherit;
+  font-size: .9em;
+}
+
+/* Carnet ouvert : la souris est sur le panneau, on rend le curseur système */
+body.carnet-ouvert { cursor: auto; }
+body.carnet-ouvert .curseur { opacity: 0; }
+
+.carnet {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: min(560px, 100%);
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  background: rgba(3, 12, 20, .86);
+  backdrop-filter: blur(16px);
+  border-left: 1px solid rgba(217, 236, 245, .1);
+  transform: translateX(100%);            /* caché à droite… */
+  transition: transform .55s cubic-bezier(.2, .8, .2, 1);
+}
+.carnet.ouvert { transform: none; }       /* …et il glisse en place */
+
+.carnet-entete {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 22px 28px 14px;
+  border-bottom: 1px solid rgba(217, 236, 245, .08);
+}
+.carnet-titre { font: 300 1.9rem var(--police-titre); letter-spacing: .1em; }
+.carnet-compte { color: var(--brume); font-size: .8rem; letter-spacing: .2em; }
+.carnet-fermer {
+  margin-left: auto;
+  width: 36px; height: 36px;
+  background: transparent;
+  color: var(--brume);
+  border: 1px solid rgba(217, 236, 245, .18);
+  border-radius: 50%;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.carnet-fermer:hover { color: var(--ecume); border-color: rgba(217, 236, 245, .5); }
+
+.carnet-grille {
+  padding: 18px 28px 28px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  overflow-y: auto;
+}
+.carte {
+  --rarete: var(--brume);
+  padding: 14px 12px 12px;
+  background: rgba(217, 236, 245, .03);
+  border: 1px solid rgba(217, 236, 245, .1);
+  border-radius: 14px;
+  color: var(--ecume);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .3s, background .3s, transform .3s;
+}
+.carte:hover, .carte:focus-visible { border-color: var(--rarete); background: rgba(217, 236, 245, .06); transform: translateY(-2px); outline: none; }
+.carte-image { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; }
+.inconnue .carte-image, .fiche-image.inconnue { filter: brightness(0) opacity(.5); }   /* la silhouette : même image, noircie */
+.carte-nom { display: block; margin-top: 8px; font: 400 1.05rem var(--police-titre); letter-spacing: .03em; }
+.carte-rarete { display: block; margin-top: 4px; font-size: .58rem; letter-spacing: .22em; text-transform: uppercase; color: var(--rarete); }
+
+.carnet-fiche { padding: 14px 32px 40px; overflow-y: auto; --rarete: var(--brume); }
+.fiche-retour {
+  background: transparent; color: var(--brume); border: 0; padding: 0; margin-bottom: 8px;
+  font: 400 .72rem var(--police-ui); letter-spacing: .15em; text-transform: uppercase; cursor: pointer;
+}
+.fiche-retour:hover { color: var(--ecume); }
+.fiche-image { display: block; width: 70%; max-height: 240px; margin: 0 auto; object-fit: contain; }
+.fiche-rarete { font-size: .62rem; letter-spacing: .25em; text-transform: uppercase; color: var(--rarete); margin-top: 8px; }
+.fiche-nom { font: 300 2rem var(--police-titre); letter-spacing: .04em; line-height: 1.1; margin-top: .2rem; }
+.fiche-latin { font: italic 300 1rem var(--police-titre); color: var(--brume); margin-top: .2rem; }
+.fiche-texte { margin-top: 1rem; font-weight: 300; font-size: .92rem; line-height: 1.65; color: rgba(217, 236, 245, .85); }
+.fiche-infos { margin-top: 1.1rem; display: grid; grid-template-columns: max-content 1fr; gap: .35rem 1.2rem; font-size: .85rem; }
+.fiche-infos dt { color: var(--brume); letter-spacing: .12em; text-transform: uppercase; font-size: .62rem; padding-top: .2rem; }
+.fiche-infos dd { font-weight: 300; line-height: 1.5; }
+.fiche-anecdote {
+  margin-top: 1.2rem; padding: .8rem 1rem;
+  border-left: 2px solid var(--rarete);
+  font: italic 300 .95rem var(--police-titre);
+  line-height: 1.55;
+  color: rgba(217, 236, 245, .85);
+}
+.fiche-observation { margin-top: 1.4rem; font-size: .7rem; letter-spacing: .15em; text-transform: uppercase; color: var(--brume); }

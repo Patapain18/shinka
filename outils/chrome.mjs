@@ -69,8 +69,15 @@ export async function piloter({ largeur = 1440, hauteur = 900 } = {}) {
     },
     async fermer() {
       ws.close();
+      // Attendre que Chrome soit vraiment sorti : sinon il écrit encore dans son profil
+      // pendant qu'on l'efface (ENOTEMPTY)
+      const sorti = new Promise((r) => chrome.once('exit', r));
       chrome.kill();
-      await rm(profil, { recursive: true, force: true });
+      await Promise.race([sorti, dormir(4000)]);
+      for (let essai = 0; essai < 5; essai++) {
+        try { await rm(profil, { recursive: true, force: true }); break; }
+        catch { await dormir(300); }
+      }
     },
   };
 }

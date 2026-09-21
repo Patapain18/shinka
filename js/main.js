@@ -7,6 +7,7 @@
    Étape 3 : chargement des modèles, puis le spawner fait passer les animaux.
    Étape 4 : l'horloge (heure réelle) règle la lumière et renseigne le spawner.
    Étape 5 : observation (curseur-jauge), collection, toasts, halo.
+   Étape 6 : le carnet (panneau, grille, fiches).
    ============================================ */
 
 import * as THREE from 'three';
@@ -19,6 +20,7 @@ import { creerHorloge } from './daytime.js';
 import { creerUI } from './ui.js';
 import { creerObservation } from './observe.js';
 import { nombreObservees } from './collection.js';
+import { creerCarnet } from './carnet.js';
 
 /* ---------- Le renderer, avec filet de sécurité ---------- */
 // Si WebGL est indisponible, on le dit au visiteur au lieu de lui laisser un écran noir.
@@ -74,8 +76,16 @@ const observation = creerObservation({
     } else {
       ui.toast({ titre: `vu ${compte} fois`, nom, rarete, discret: true });
     }
+    carnet.rafraichir();
     // (étape 7 : carillon ici)
   },
+});
+
+/* ---------- Le carnet (touche C) ---------- */
+// Quand il est ouvert, on arrête d'observer : la souris est sur le panneau, pas sur le bassin.
+const carnet = creerCarnet({
+  surOuverture: () => observation.actif(false),
+  surFermeture: () => observation.actif(true),
 });
 
 let spawner = null;   // n'existe qu'une fois les modèles chargés
@@ -152,7 +162,7 @@ function demo(temps) {
 }
 
 /* ---------- Poignée pour les outils de test (outils/*.mjs) ---------- */
-window.__shinka = { camera, get spawner() { return spawner; }, observation, horloge };
+window.__shinka = { camera, get spawner() { return spawner; }, observation, horloge, carnet };
 
 /* ---------- Boucle ---------- */
 const chrono = new THREE.Clock();   // le chronomètre de la boucle (l'horloge du jour, c'est `horloge`)
