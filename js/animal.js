@@ -27,6 +27,15 @@ export class Animal {
     this.mixer = mixer;
     this.objet.scale.setScalar(espece.echelle);
 
+    // Le clonage partage les matériaux entre tous les individus d'une espèce.
+    // Pour faire briller CE requin sans allumer les autres, chacun reçoit sa copie.
+    this.materiaux = [];
+    this.objet.traverse((o) => {
+      if (o.isMesh) { o.material = o.material.clone(); this.materiaux.push(o.material); }
+    });
+    this.observe = false;      // validé pendant ce passage ?
+    this.haloRestant = 0;      // secondes de halo encore à jouer
+
     // Chaque individu nage un peu plus vite ou plus lentement que la moyenne…
     this.vitesse = vitesse ?? espece.vitesse * THREE.MathUtils.randFloat(0.85, 1.15);
     // …et son animation suit : un requin pressé bat plus vite de la queue.
@@ -53,6 +62,22 @@ export class Animal {
     if (this.u >= 1) { this.fini = true; return; }
     this.placer();
     this.mixer.update(dt);
+    this.majHalo(dt);
+  }
+
+  /** Une lueur brève sur l'animal : il vient d'être observé. */
+  halo(duree = 1.6) {
+    this.haloDuree = duree;
+    this.haloRestant = duree;
+  }
+
+  majHalo(dt) {
+    if (this.haloRestant <= 0) return;
+    this.haloRestant = Math.max(0, this.haloRestant - dt);
+    // Monte vite, redescend lentement : sin(π·t) déformé vers le début
+    const t = 1 - this.haloRestant / this.haloDuree;
+    const k = Math.sin(Math.PI * Math.pow(t, 0.55)) * 0.14;
+    for (const m of this.materiaux) m.emissive.setRGB(0.35 * k, 0.7 * k, 1.0 * k);   // lueur bleutée
   }
 
   placer() {

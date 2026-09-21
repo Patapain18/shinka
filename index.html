@@ -41,16 +41,18 @@
       <button id="btn-entrer" class="btn-entrer" type="button" disabled>Chargement…</button>
       <div class="entree-barre" aria-hidden="true"><div id="barre-chargement"></div></div>
       <p class="entree-note">Casque conseillé</p>
-      <p id="entree-erreur" class="entree-erreur" hidden></p>
     </div>
   </section>
+
+  <!-- Zone d'erreur globale : hors de l'écran d'entrée, pour rester visible même après lui -->
+  <p id="erreur-globale" class="erreur-globale" hidden></p>
 
   <!-- Filet de sécurité : toute erreur JS non rattrapée s'affiche ici en clair.
        Un visiteur comprend pourquoi ça ne démarre pas, et nous on la voit sur une capture d'écran. -->
   <script>
     (function () {
       function montrer(message) {
-        var p = document.getElementById('entree-erreur');
+        var p = document.getElementById('erreur-globale');
         p.hidden = false;
         p.textContent = 'Une erreur est survenue : ' + message;
       }
@@ -59,8 +61,22 @@
     })();
   </script>
 
-  <!-- HUD discret : l'heure et la phase du bassin (aube / jour / crépuscule / nuit) -->
-  <div class="hud" aria-hidden="true"><span id="hud-heure"></span></div>
+  <!-- HUD discret : l'heure et la phase du bassin, et l'avancement de la collection -->
+  <div class="hud" aria-hidden="true"><span id="hud-heure"></span><span class="hud-sep">·</span><span id="hud-collection"></span></div>
+
+  <!-- Le curseur : un anneau qui se remplit quand on observe un animal -->
+  <div id="curseur" class="curseur" aria-hidden="true">
+    <div class="curseur-anneau">
+      <svg viewBox="0 0 48 48">
+        <circle class="curseur-fond" cx="24" cy="24" r="20"/>
+        <circle class="curseur-jauge" cx="24" cy="24" r="20"/>
+      </svg>
+      <span class="curseur-point"></span>
+    </div>
+  </div>
+
+  <!-- Les toasts (« Nouvelle espèce observée ») -->
+  <div id="toasts" class="toasts" aria-live="polite"></div>
 
   <!-- type="module" : active import/export, et le script s'exécute une fois le HTML
        parsé (pas besoin de defer ni d'attendre DOMContentLoaded). -->

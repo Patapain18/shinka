@@ -343,7 +343,7 @@ Chaque étape donne quelque chose de visible et qui marche. On n'attaque pas la 
 | 2 | ✅ 2026-09-21 — L'eau : rayons, particules, caustiques, sol (`water.js`) | Beau sans aucun animal |
 | 3 | ✅ 2026-09-21 — Les animaux : catalogue (`species.js`), chargeur + clonage de squelette (`modeles.js`), classe `Animal` (courbe Catmull-Rom + `AnimationMixer`), spawner de base, barre de chargement | Ça vit |
 | 4 | ✅ 2026-09-21 — `daytime.js` (heure réelle → 8 repères de lumière interpolés, `?heure=` / `?tempo=`), spawner pondéré + heures + repos + pitié + groupes, HUD heure/phase, espèces `chirurgien` (commun, jour, ×4) et `requin-marteau` (rare, crépuscule/nuit) | Nuit ≠ jour |
-| 5 | Observation : raycast, jauge, halo, toasts ; collection localStorage | Le cœur du site |
+| 5 | ✅ 2026-09-21 — `observe.js` (sphère englobante ×1,3, jauge 2-3,5 s, vidage 0,5 s), `collection.js` (localStorage `shinka.v1`), `ui.js` (curseur-anneau SVG, toasts par rareté, compteur HUD), halo émissif par instance (`animal.js`) | Le cœur du site |
 | 6 | Carnet : panneau, grille, fiches, silhouettes | On peut « collectionner » |
 | 7 | Audio : playlist, fondu, ambiance, sons, player, crédits | L'ambiance est là |
 | 8 | ~~Premier vrai modèle~~ → fusionné dans l'étape 3 : le requin généré (`models/requin-recif.glb`) est disponible dès maintenant, plus besoin de placeholders | ✅ pipeline validé le 2026-09-21 |
@@ -354,7 +354,22 @@ Le premier `.glb` existe déjà : l'étape 3 charge directement le requin (GLTFL
 
 ---
 
-## 11. Questions encore ouvertes
+## 11. Outils de développement (`outils/`)
+
+Le navigateur intégré de l'app n'a pas de WebGL, et `chrome --screenshot` fige la page avant de la
+photographier (pas de `requestAnimationFrame`). D'où ces outils, qui pilotent Chrome headless par le
+protocole DevTools : la page vit, on attend, on capture, et la console de la page est relayée.
+
+- `node outils/capture.mjs "<url>" sortie.png [attente_s]` — une capture après N secondes de vie.
+- `node outils/test-observation.mjs sortie.png` — scénario bout-en-bout : la souris suit un animal
+  3,5 s, on vérifie compteur + toast. Écrit aussi `sortie-jauge.png` (anneau en cours).
+- `outils/chrome.mjs` — la bibliothèque commune (`piloter()` : naviguer, evaluer, souris, capturer).
+- `outils/visionneuse.html?modele=<id>` — contrôle d'un modèle (voir §7.0).
+- Modes d'URL du site : `?direct` (sans écran d'entrée), `?heure=23` / `?tempo=600` (horloge),
+  `?demo=observer` (valide un animal toutes les 2,5 s + ligne de debug en haut à gauche).
+- `window.__shinka` — poignée lecture seule (camera, spawner, observation, horloge) pour les scénarios.
+
+## 12. Questions encore ouvertes
 
 - ~~Nom~~ → **Shinka** (décidé le 2026-09-21).
 - ~~Niveau Blender~~ → Mathis ne modélise pas : les animaux sont générés par script (`blender/`). Premier : requin gris de récif.

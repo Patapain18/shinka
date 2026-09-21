@@ -6,6 +6,7 @@
    Étape 2 : l'eau (water.js) mise à jour à chaque frame.
    Étape 3 : chargement des modèles, puis le spawner fait passer les animaux.
    Étape 4 : l'horloge (heure réelle) règle la lumière et renseigne le spawner.
+   Étape 5 : observation (curseur-jauge), collection, toasts, halo.
    ============================================ */
 
 import * as THREE from 'three';
@@ -15,6 +16,9 @@ import { ESPECES } from './species.js';
 import { chargerModeles } from './modeles.js';
 import { creerSpawner } from './spawner.js';
 import { creerHorloge } from './daytime.js';
+import { creerUI } from './ui.js';
+import { creerObservation } from './observe.js';
+import { nombreObservees } from './collection.js';
 
 /* ---------- Le renderer, avec filet de sécurité ---------- */
 // Si WebGL est indisponible, on le dit au visiteur au lieu de lui laisser un écran noir.
@@ -50,15 +54,36 @@ setInterval(majHud, 1000);
 /* ---------- Chargement des modèles, puis écran d'entrée ---------- */
 // Raccourci de développement : http://localhost:8792/?direct saute l'écran d'entrée.
 // Pratique quand on retouche la scène 50 fois de suite (et pour les captures automatiques).
-const direct = new URLSearchParams(location.search).has('direct');
+const params = new URLSearchParams(location.search);
+const direct = params.has('direct');
 const barre = document.getElementById('barre-chargement');
+
+/* ---------- UI (curseur, toasts, compteur) et observation ---------- */
+const ui = creerUI();
+ui.majCompteur(nombreObservees(), ESPECES.length);
+
+const observation = creerObservation({
+  camera,
+  ui,
+  animauxVisibles: () => (spawner ? spawner.animaux : []),
+  surObservation({ animal, premiere, compte }) {
+    const { nom, rarete } = animal.espece;
+    if (premiere) {
+      ui.toast({ titre: 'Nouvelle espèce observée', nom, rarete });
+      ui.majCompteur(nombreObservees(), ESPECES.length);
+    } else {
+      ui.toast({ titre: `vu ${compte} fois`, nom, rarete, discret: true });
+    }
+    // (étape 7 : carillon ici)
+  },
+});
 
 let spawner = null;   // n'existe qu'une fois les modèles chargés
 
 chargerModeles(ESPECES, (progression) => { barre.style.width = `${Math.round(progression * 100)}%`; })
   .then(() => {
     spawner = creerSpawner(scene, camera, horloge);
-    if (direct) { entree.remove(); return; }
+    if (direct) { entree.remove(); document.body.classList.add('entre'); return; }
     btnEntrer.disabled = false;
     btnEntrer.textContent = 'Entrer';
   })
@@ -69,6 +94,7 @@ chargerModeles(ESPECES, (progression) => { barre.style.width = `${Math.round(pro
 
 btnEntrer.addEventListener('click', () => {
   entree.classList.add('cache');   // le CSS fait le fondu de 2,5 s
+  document.body.classList.add('entre');   // curseur système masqué : le nôtre prend le relais
   // (étape 7 : c'est ICI qu'on démarrera l'audio — le clic vient d'avoir lieu)
 }, { once: true });                // l'écouteur se retire tout seul après le 1er clic
 
@@ -100,6 +126,34 @@ function majParallaxe(dt) {
   camera.lookAt(pointRegarde);
 }
 
+/* ---------- Mode démo : ?demo=observer ---------- */
+// Toutes les 2,5 s, on valide l'animal le plus proche de la vitre, sans souris.
+// Sert aux captures automatiques (vérifier toast, halo, compteur). Dans la boucle
+// plutôt qu'en setInterval : les timers peuvent être bridés, pas la boucle de rendu.
+const enDemo = params.get('demo') === 'observer';
+let prochaineDemo = 1;
+let validationsDemo = 0;
+const debug = enDemo ? Object.assign(document.createElement('pre'), { id: 'debug' }) : null;
+if (debug) document.body.appendChild(debug);
+function demo(temps) {
+  if (!enDemo) return;
+  const animaux = spawner ? spawner.animaux : [];
+  const candidats = animaux.filter((a) => !a.observe);
+  debug.textContent = `démo · t=${temps.toFixed(1)} · spawner=${!!spawner} · animaux=${animaux.length} · candidats=${candidats.length} · validations=${validationsDemo} · prochaine=${prochaineDemo.toFixed(1)}`;
+  if (!spawner || temps < prochaineDemo || !candidats.length) return;
+  prochaineDemo = temps + 2.5;
+  candidats.sort((a, b) => b.objet.position.z - a.objet.position.z);
+  try {
+    observation.valider(candidats[0]);
+    validationsDemo++;
+  } catch (erreur) {
+    debug.textContent += `\nERREUR valider : ${erreur.message}\n${erreur.stack}`;
+  }
+}
+
+/* ---------- Poignée pour les outils de test (outils/*.mjs) ---------- */
+window.__shinka = { camera, get spawner() { return spawner; }, observation, horloge };
+
 /* ---------- Boucle ---------- */
 const chrono = new THREE.Clock();   // le chronomètre de la boucle (l'horloge du jour, c'est `horloge`)
 
@@ -115,6 +169,8 @@ function boucle() {
   horloge.maj(dt);
   eau.maj(dt, temps);
   spawner?.maj(dt);               // « ?. » : ne fait rien tant que spawner vaut null
+  observation.maj(dt);
+  demo(temps);
   renderer.render(scene, camera);
 
   requestAnimationFrame(boucle);   // « rappelle-moi à la prochaine image »
