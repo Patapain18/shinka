@@ -43,7 +43,7 @@ export function creerObservation({ camera, animauxVisibles, ui, surObservation }
     for (const animal of animauxVisibles()) {
       if (animal.observe) continue;                            // déjà validé pendant ce passage
       sphere.center.copy(animal.objet.position);
-      sphere.radius = Math.max(0.25, animal.espece.taille * 0.5 * 1.3);
+      sphere.radius = animal.rayonHitbox ?? Math.max(0.25, animal.espece.taille * 0.5 * 1.3);   // un banc a la sienne
       if (raycaster.ray.intersectSphere(sphere, impact)) {
         const d = impact.distanceTo(camera.position);
         if (d < distanceMin) { distanceMin = d; plusProche = animal; }

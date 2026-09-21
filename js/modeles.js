@@ -33,6 +33,13 @@ export function chargerModeles(especes, surProgression) {
   })));
 }
 
+/** Le modèle tel que chargé (pour le banc, qui instancie la géométrie lui-même). */
+export function brut(id) {
+  const gltf = cache.get(id);
+  if (!gltf) throw new Error(`Modèle non chargé : ${id}`);
+  return gltf;
+}
+
 /** Une copie indépendante du modèle, prête à être animée. */
 export function instancier(id) {
   const gltf = cache.get(id);

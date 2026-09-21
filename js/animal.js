@@ -8,7 +8,7 @@
 
 import * as THREE from 'three';
 import { instancier } from './modeles.js';
-import { facteurNuit } from './daytime.js';
+import { creerLumiere } from './lumiere.js';
 
 const _cible = new THREE.Vector3();   // vecteur de travail, réutilisé (pas d'allocation à chaque frame)
 
@@ -36,10 +36,7 @@ export class Animal {
       if (o.isMesh) { o.material = o.material.clone(); this.materiaux.push(o.material); }
     });
     this.observe = false;      // validé pendant ce passage ?
-    this.haloRestant = 0;      // secondes de halo encore à jouer
-    this.horloge = horloge;
-    this.emission = espece.emission ? new THREE.Color(espece.emission) : null;   // luit la nuit
-    this.lumiereActive = false;
+    this.lumiere = creerLumiere(this.materiaux, espece.emission, horloge);   // halo + lueur nocturne
 
     // Chaque individu nage un peu plus vite ou plus lentement que la moyenne…
     this.vitesse = vitesse ?? espece.vitesse * THREE.MathUtils.randFloat(0.85, 1.15);
@@ -67,35 +64,11 @@ export class Animal {
     if (this.u >= 1) { this.fini = true; return; }
     this.placer();
     this.mixer.update(dt);
-    this.majLumiere(dt);
+    this.lumiere.maj(dt);
   }
 
   /** Une lueur brève sur l'animal : il vient d'être observé. */
-  halo(duree = 1.6) {
-    this.haloDuree = duree;
-    this.haloRestant = duree;
-  }
-
-  /** L'émissif du matériau = le halo d'observation + (pour une espèce qui luit) la nuit. */
-  majLumiere(dt) {
-    let kHalo = 0;
-    if (this.haloRestant > 0) {
-      this.haloRestant = Math.max(0, this.haloRestant - dt);
-      // Monte vite, redescend lentement : sin(π·t) déformé vers le début
-      const t = 1 - this.haloRestant / this.haloDuree;
-      kHalo = Math.sin(Math.PI * Math.pow(t, 0.55)) * 0.14;
-    }
-    const kNuit = (this.emission && this.horloge) ? 0.05 + 0.6 * facteurNuit(this.horloge.heure) : 0;
-    const actif = kHalo > 0 || kNuit > 0;
-    if (!actif && !this.lumiereActive) return;          // rien à faire, rien à éteindre
-    this.lumiereActive = actif;
-    const e = this.emission;
-    for (const m of this.materiaux) {
-      m.emissive.setRGB(0.35 * kHalo + (e ? e.r * kNuit : 0),
-                        0.70 * kHalo + (e ? e.g * kNuit : 0),
-                        1.00 * kHalo + (e ? e.b * kNuit : 0));
-    }
-  }
+  halo(duree) { this.lumiere.halo(duree); }
 
   placer() {
     const u = Math.min(this.u, 1);

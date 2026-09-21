@@ -9,6 +9,7 @@
    Étape 5 : observation (curseur-jauge), collection, toasts, halo.
    Étape 6 : le carnet (panneau, grille, fiches).
    Étape 7 : l'audio (ambiance générée, sons, musique CC0).
+   Étape 9 : les événements rares (banc de sardines, géant, eau trouble).
    ============================================ */
 
 import * as THREE from 'three';
@@ -23,6 +24,7 @@ import { creerObservation } from './observe.js';
 import { nombreObservees } from './collection.js';
 import { creerCarnet } from './carnet.js';
 import { creerAudio } from './audio.js';
+import { creerEvenements } from './evenements.js';
 
 /* ---------- Le renderer, avec filet de sécurité ---------- */
 // Si WebGL est indisponible, on le dit au visiteur au lieu de lui laisser un écran noir.
@@ -85,6 +87,9 @@ const observation = creerObservation({
     if (premiere) audio.carillon(); else audio.tic();
   },
 });
+
+/* ---------- Les événements rares (banc, géant, trouble) ---------- */
+const evenements = creerEvenements({ camera, horloge, eau, audio, spawner: () => spawner });
 
 /* ---------- Le carnet (touche C) ---------- */
 // Quand il est ouvert, on arrête d'observer : la souris est sur le panneau, pas sur le bassin.
@@ -177,7 +182,7 @@ function demo(temps) {
 }
 
 /* ---------- Poignée pour les outils de test (outils/*.mjs) ---------- */
-window.__shinka = { camera, get spawner() { return spawner; }, observation, horloge, carnet, audio };
+window.__shinka = { camera, get spawner() { return spawner; }, observation, horloge, carnet, audio, evenements };
 
 /* ---------- Boucle ---------- */
 const chrono = new THREE.Clock();   // le chronomètre de la boucle (l'horloge du jour, c'est `horloge`)
@@ -194,6 +199,7 @@ function boucle() {
   horloge.maj(dt);
   eau.maj(dt, temps);
   spawner?.maj(dt);               // « ?. » : ne fait rien tant que spawner vaut null
+  evenements.maj(dt);
   observation.maj(dt);
   demo(temps);
   renderer.render(scene, camera);

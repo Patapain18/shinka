@@ -192,8 +192,45 @@ export function creerAudio() {
     if (!ctx) return;
     note(987.77, ctx.currentTime, 0.4, 0.07);
   }
-  /** Un rare entre en scène : un grondement grave qui descend. */
-  function grondement() {
+  /** Le chant d'une baleine : deux voix qui glissent, très doucement, dans l'écho. */
+  function chant() {
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    for (const [f0, f1, f2, depart, gain] of [[160, 380, 240, 0, 0.05], [240, 520, 330, 1.8, 0.03]]) {
+      const o = ctx.createOscillator();
+      o.frequency.setValueAtTime(f0, t + depart);
+      o.frequency.exponentialRampToValueAtTime(f1, t + depart + 2.6);
+      o.frequency.exponentialRampToValueAtTime(f2, t + depart + 4.5);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t + depart);
+      g.gain.exponentialRampToValueAtTime(gain, t + depart + 1.2);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + depart + 5.0);
+      o.connect(g).connect(busSons);
+      o.start(t + depart);
+      o.stop(t + depart + 5.1);
+    }
+  }
+  /** Un souffle : le bruit de fond filtré qui gonfle puis retombe (un banc qui passe). */
+  function souffle(duree = 4) {
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const source = ctx.createBufferSource();
+    source.buffer = bruitBrun();
+    source.loop = true;
+    const filtre = ctx.createBiquadFilter();
+    filtre.type = 'bandpass';
+    filtre.frequency.value = 700;
+    filtre.Q.value = 0.5;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.12, t + duree * 0.4);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + duree);
+    source.connect(filtre).connect(g).connect(master);
+    source.start(t);
+    source.stop(t + duree + 0.1);
+  }
+  /** Un rare entre en scène : un grondement grave qui descend (intensite : 1 = plein). */
+  function grondement(intensite = 1) {
     if (!ctx) return;
     const t = ctx.currentTime;
     const o = ctx.createOscillator();
@@ -201,7 +238,7 @@ export function creerAudio() {
     o.frequency.exponentialRampToValueAtTime(34, t + 2.6);
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.3, t + 0.9);
+    g.gain.exponentialRampToValueAtTime(0.3 * intensite, t + 0.9);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 3.4);
     o.connect(g).connect(master);
     o.start(t);
@@ -213,7 +250,7 @@ export function creerAudio() {
     filtre.frequency.value = 90;
     const gs = ctx.createGain();
     gs.gain.setValueAtTime(0.0001, t);
-    gs.gain.exponentialRampToValueAtTime(0.22, t + 1.0);
+    gs.gain.exponentialRampToValueAtTime(0.22 * intensite, t + 1.0);
     gs.gain.exponentialRampToValueAtTime(0.0001, t + 3.2);
     souffle.connect(filtre).connect(gs).connect(master);
     souffle.start(t);
@@ -301,7 +338,7 @@ export function creerAudio() {
   }
 
   return {
-    demarrer, carillon, tic, grondement, volume, couper,
+    demarrer, carillon, tic, grondement, chant, souffle, volume, couper,
     get pret() { return ctx !== null; },
     /** Pour les tests : l'état courant en clair. */
     etat() {

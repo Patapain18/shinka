@@ -31,6 +31,7 @@ function formatDate(iso) {
 }
 
 function heuresTexte(espece) {
+  if (espece.evenement) return 'lors d’un événement rare';
   if (espece.heures.length === 4) return 'à toute heure';
   return espece.heures.map((h) => LIBELLE_HEURE[h]).join(', ');
 }

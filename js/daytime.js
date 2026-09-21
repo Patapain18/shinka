@@ -12,6 +12,7 @@
    ============================================ */
 
 import * as THREE from 'three';
+import { BASSIN } from './scene.js';
 
 /* Les phases de DESIGN.md §5, en heures décimales */
 export function phaseDe(heure) {
@@ -57,6 +58,8 @@ export function creerHorloge({ scene, lumieres, eau, renderer }) {
   let heure = heureForcee ?? heureReelle();
 
   const brume = new THREE.Color();   // objets de travail : pas d'allocation à chaque frame
+  // Multiplicateurs que les événements peuvent pousser (eau trouble) : 1 = normal
+  const modulation = { brume: 1, soleil: 1, rayons: 1 };
 
   function appliquer() {
     // Trouver les deux repères qui encadrent l'heure, et où on en est entre les deux (t : 0 → 1)
@@ -68,16 +71,18 @@ export function creerHorloge({ scene, lumieres, eau, renderer }) {
 
     brume.lerpColors(a.brume, b.brume, t);
     scene.fog.color.copy(brume);
+    scene.fog.density = BASSIN.densiteBrume * modulation.brume;
     scene.background.copy(brume);                 // fond ET brouillard : même couleur, sinon on voit la couture
     lumieres.soleil.color.lerpColors(a.soleil, b.soleil, t);
-    lumieres.soleil.intensity = entre('intensiteSoleil');
+    lumieres.soleil.intensity = entre('intensiteSoleil') * modulation.soleil;
     lumieres.ambiance.intensity = entre('ambiance');
-    eau.regler({ rayons: entre('rayons'), caustiques: entre('caustiques') });
+    eau.regler({ rayons: entre('rayons') * modulation.rayons, caustiques: entre('caustiques') });
     renderer.toneMappingExposure = entre('exposition');
   }
   appliquer();
 
   return {
+    modulation,
     get heure() { return heure; },
     get phase() { return phaseDe(heure); },
     maj(dt) {

@@ -107,7 +107,7 @@ Les gros passent loin et lentement ; les petits, près et vite.
 
 | id | Nom | Rareté | Taille | Heures | Rig Blender | Notes |
 |---|---|---|---|---|---|---|
-| `sardine` | Sardine (banc) | commun | 0,2 m | jour | colonne 3-4 os | **1 seul modèle**, instancié ×150 en banc (boids simplifié) |
+| `sardine` | Sardine (banc) | commun | 16 cm | aube-jour-crépuscule | ✅ SANS squelette : nage en vertex shader, `InstancedMesh` ×150 (`banc.js`) | rotation autour du centre du banc, rayon et hauteur qui respirent |
 | `chirurgien` | Poisson-chirurgien bleu | commun | 0,3 m | aube-jour | ✅ colonne 4 os | ×4 |
 | `requin-recif` | Requin gris de récif | peu commun | 1,8 m | toutes | ✅ colonne 5 os | premier modèle (2026-09-21) |
 | `tortue` | Tortue verte | peu commun | 1,2 m | aube-jour-crépuscule | ✅ 4 nageoires + cou + queue (`animer_os`) | lente, majestueuse |
@@ -118,6 +118,7 @@ Les gros passent loin et lentement ; les petits, près et vite.
 
 ### v2 — candidats (quand la v1 tourne)
 
+✅ `baleine` (baleine à bosse, 14 m, légendaire, **uniquement par l'événement « géant »**, queue qui bat de haut en bas).
 Poisson-clown (commun, banc de 3), mérou (peu commun, immobile près du sol), barracuda (peu commun),
 poisson-lune / Mola mola (rare, bizarre et lent), raie pastenague (peu commun, rase le sol),
 poulpe (rare, tentacules = rig lourd), baudroie abyssale (rare, **nuit seulement**, lanterne émissive),
@@ -188,9 +189,9 @@ Debug : `?heure=23` fige l'heure, `?tempo=600` fait défiler une journée en 2 m
 
 ### Événements rares (toutes les 12-25 min, tirage au hasard)
 
-- **Le banc** — 300 sardines envahissent tout l'écran pendant 40 s, tourbillonnent, disparaissent.
-- **Le géant** — une silhouette de baleine passe très loin, très lentement, avec un son grave. Observable = légendaire spécial.
-- **Trouble** — 30 s d'eau chargée : brouillard ↑, particules ↑, lumière qui vacille. Pure ambiance, rien à collecter.
+- **Le banc** — ✅ 300 sardines en tourbillon sur une boucle fermée devant la vitre pendant 36 s, puis elles s'en vont (souffle audio).
+- **Le géant** — ✅ la baleine à bosse passe à 18-22 m (silhouette), 0,8 m/s, et chante deux fois. Observable = légendaire (`evenement: true`, jamais tirée au sort).
+- **Trouble** — ✅ 30 s : `horloge.modulation` (brume ×1,8, soleil −35 % + vacillement, rayons −50 %), neige ×2,5. Pure ambiance.
 - *(idée v2)* **Le plongeur** — la nuit, une lampe torche traverse le bassin.
 
 ---
@@ -359,7 +360,7 @@ Chaque étape donne quelque chose de visible et qui marche. On n'attaque pas la 
 | 6 | ✅ 2026-09-21 — `carnet.js` (panneau touche C / bouton, grille triée par rareté, silhouettes CSS, fiches complètes), vignettes générées par `outils/vignettes.mjs` (visionneuse `?vignette`), observation en pause quand le carnet est ouvert | On peut « collectionner » |
 | 7 | ✅ 2026-09-21 — `audio.js` : ambiance et sons **générés** (Web Audio : bruit brun filtré qui respire, sub, bulles, carillon, tic, grondement), 6 morceaux CC0 d'archive.org (`playlist.js`, `audio/music/CREDITS.md`), deux lecteurs à fondu enchaîné de 4 s, filtre « sous l'eau », player + crédits, volume/mute persistés | L'ambiance est là |
 | 8 | ~~Premier vrai modèle~~ → fusionné dans l'étape 3 : le requin généré (`models/requin-recif.glb`) est disponible dès maintenant, plus besoin de placeholders | ✅ pipeline validé le 2026-09-21 |
-| 9 | Événements rares (banc, géant, trouble) | Les surprises |
+| 9 | ✅ 2026-09-21 — `evenements.js` (toutes les 12-25 min, `?evenement=banc\|geant\|trouble`) : banc de 300 sardines en tourbillon (`banc.js` : InstancedMesh + nage en vertex shader + rotation autour d'un centre), baleine à bosse au loin avec son chant, eau trouble (modulation brume/soleil/rayons/neige) ; sardine en espèce commune (banc de 150) ; `lumiere.js` partagé | Les surprises |
 | 10 | Polish : post-processing, vitre, perf, version tablette/mobile minimale, déploiement GitHub Pages | En ligne |
 
 Le premier `.glb` existe déjà : l'étape 3 charge directement le requin (GLTFLoader + AnimationMixer).
@@ -385,7 +386,8 @@ protocole DevTools : la page vit, on attend, on capture, et la console de la pag
 - `outils/visionneuse.html?modele=<id>` — contrôle d'un modèle (voir §7.0).
 - Modes d'URL du site : `?direct` (sans écran d'entrée), `?heure=23` / `?tempo=600` (horloge),
   `?demo=observer` (valide un animal toutes les 2,5 s + ligne de debug en haut à gauche),
-  `?forcer=meduse` (cette espèce entre d'emblée, quelle que soit l'heure).
+  `?forcer=meduse` (cette espèce entre d'emblée, quelle que soit l'heure),
+  `?evenement=banc|geant|trouble` (l'événement démarre 2 s après l'entrée).
 - Visionneuse : `&temps=1.5` fige la pose à cet instant (pour comparer des phases d'animation).
 - `window.__shinka` — poignée lecture seule (camera, spawner, observation, horloge) pour les scénarios.
 

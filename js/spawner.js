@@ -11,6 +11,7 @@
 
 import * as THREE from 'three';
 import { Animal } from './animal.js';
+import { Banc } from './banc.js';
 import { ESPECES } from './species.js';
 
 export const POIDS = { 'commun': 60, 'peu-commun': 25, 'rare': 12, 'legendaire': 3 };
@@ -94,7 +95,12 @@ export function creerSpawner(scene, camera, horloge, { surEntree } = {}) {
     const nb = espece.groupe;
     const vitesse = espece.vitesse * THREE.MathUtils.randFloat(0.85, 1.15);
     const rien = new THREE.Vector3();
-    for (let i = 0; i < nb; i++) {
+    let dernier = null;
+    if (espece.banc) {                                   // un banc : un seul objet pour tous
+      dernier = new Banc(espece, courbe(points, rien), { nombre: nb, uDepart, vitesse, horloge });
+      scene.add(dernier.objet);
+      animaux.push(dernier);
+    } else for (let i = 0; i < nb; i++) {
       // En groupe : même trajectoire un peu décalée, même vitesse (sinon ils se dispersent)
       const decalage = nb > 1
         ? new THREE.Vector3(THREE.MathUtils.randFloatSpread(1.6), THREE.MathUtils.randFloatSpread(0.8), THREE.MathUtils.randFloatSpread(1.2))
@@ -103,17 +109,20 @@ export function creerSpawner(scene, camera, horloge, { surEntree } = {}) {
       const animal = new Animal(espece, courbe(points, decalage), uDepart, vitesse * (nb > 1 ? THREE.MathUtils.randFloat(0.97, 1.03) : 1), horloge);
       scene.add(animal.objet);
       animaux.push(animal);
+      dernier = animal;
     }
     dernierPassage.set(espece.id, maintenant);
     if (RARE(espece)) dernierRare = maintenant;
     surEntree?.(espece);
     console.info(`→ ${espece.nom} (${espece.rarete}${nb > 1 ? `, ×${nb}` : ''}) — ${horloge.phase}`);
+    return dernier;
   }
 
   function retirer(indice) {
     const animal = animaux[indice];
     scene.remove(animal.objet);
-    animal.mixer.stopAllAction();
+    animal.mixer?.stopAllAction();     // un Animal a un mixer…
+    animal.detruire?.();               // …un Banc a une géométrie à libérer
     animaux.splice(indice, 1);
   }
 
@@ -128,6 +137,9 @@ export function creerSpawner(scene, camera, horloge, { surEntree } = {}) {
 
   return {
     animaux,
+    faireEntrer,
+    /** Un objet animé venu d'ailleurs (un événement) : le spawner le fait vivre et le retire à la fin. */
+    ajouter(objetAnime) { scene.add(objetAnime.objet); animaux.push(objetAnime); },
     maj(dt) {
       maintenant += dt;
       compteur -= dt;
