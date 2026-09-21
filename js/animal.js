@@ -16,8 +16,9 @@ export class Animal {
    * @param espece      entrée du catalogue
    * @param trajectoire THREE.Curve (CatmullRomCurve3) à parcourir de u = 0 à u = 1
    * @param uDepart     0 = entre par le bord ; 0.5 = apparaît déjà au milieu (peuplement initial)
+   * @param vitesse     m/s imposée (les membres d'un groupe partagent la même) ; sinon tirée au sort
    */
-  constructor(espece, trajectoire, uDepart = 0) {
+  constructor(espece, trajectoire, uDepart = 0, vitesse = null) {
     this.espece = espece;
     this.fini = false;
 
@@ -27,7 +28,7 @@ export class Animal {
     this.objet.scale.setScalar(espece.echelle);
 
     // Chaque individu nage un peu plus vite ou plus lentement que la moyenne…
-    this.vitesse = espece.vitesse * THREE.MathUtils.randFloat(0.85, 1.15);
+    this.vitesse = vitesse ?? espece.vitesse * THREE.MathUtils.randFloat(0.85, 1.15);
     // …et son animation suit : un requin pressé bat plus vite de la queue.
     this.mixer.timeScale = this.vitesse / espece.vitesse;
 

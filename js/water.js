@@ -118,6 +118,7 @@ function creerSol(scene) {
   const sol = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), materiau);
   sol.rotation.x = -Math.PI / 2;   // un plan est vertical par défaut : on le couche
   sol.position.y = BASSIN.sol;
+  sol.userData.intensiteBase = materiau.uniforms.uIntensite.value;
   scene.add(sol);
   return sol;
 }
@@ -190,6 +191,7 @@ function creerRayons(scene, camera) {
     rayon.scale.set(THREE.MathUtils.randFloat(1.2, 3.8), 20, 1);
     rayon.userData.inclinaison = THREE.MathUtils.randFloatSpread(0.35);
     rayon.userData.phase = Math.random() * Math.PI * 2;
+    rayon.userData.intensiteBase = materiau.uniforms.uIntensite.value;   // pour le réglage jour / nuit
     scene.add(rayon);
     rayons.push(rayon);
   }
@@ -205,6 +207,9 @@ function creerRayons(scene, camera) {
         // …puis incliné, avec un balancement lent propre à chaque rayon
         rayon.rotateZ(rayon.userData.inclinaison + Math.sin(temps * 0.18 + rayon.userData.phase) * 0.05);
       }
+    },
+    regler(facteur) {
+      for (const rayon of rayons) rayon.material.uniforms.uIntensite.value = rayon.userData.intensiteBase * facteur;
     },
   };
 }
@@ -342,6 +347,11 @@ export function creerEau(scene, camera) {
       rayons.maj(dt, temps);
       neige.maj(dt, temps);
       bulles.maj(dt, temps);
+    },
+    // Multiplicateurs (1 = plein jour) appliqués par daytime.js selon l'heure
+    regler({ rayons: fRayons = 1, caustiques: fCaustiques = 1 } = {}) {
+      rayons.regler(fRayons);
+      sol.material.uniforms.uIntensite.value = sol.userData.intensiteBase * fCaustiques;
     },
   };
 }

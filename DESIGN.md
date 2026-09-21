@@ -164,7 +164,7 @@ calmar géant (légendaire, **nuit seulement**), dauphin (rare, rapide), baleine
 ```
 toutes les ~8 s (± hasard) :
   si trop d'animaux à l'écran (max 12, moins si le PC rame)  → on attend
-  candidats = espèces actives à cette heure ET pas en « repos » (cooldown 2 min après un passage)
+  candidats = espèces actives à cette heure ET pas en « repos » (repos selon la rareté : commun 20 s, peu commun 45 s, rare 150 s, légendaire 420 s)
   si aucun rare/légendaire depuis plus de 6 min                → tirage forcé parmi rares/légendaires (« pitié »)
   sinon                                                        → tirage pondéré selon les poids ci-dessus
   on tire une trajectoire adaptée à l'espèce (côté d'entrée, profondeur, distance)
@@ -183,8 +183,8 @@ Espérance : un légendaire toutes les ~4-5 min en moyenne, jamais plus de 6 min
 | nuit | 21h–6h | quasi noir, faible lueur, méduses émissives | marteau, méduses, (v2 : baudroie, calmar) |
 
 Les presets (intensité/couleur du soleil, couleur du brouillard, intensité des rayons) sont
-**interpolés minute par minute**, pas de bascule brutale. Une variable de debug permettra de
-forcer une heure pour tester sans attendre minuit.
+**interpolés en continu** entre 8 repères sur 24 h (`daytime.js`), pas de bascule brutale.
+Debug : `?heure=23` fige l'heure, `?tempo=600` fait défiler une journée en 2 min 24.
 
 ### Événements rares (toutes les 12-25 min, tirage au hasard)
 
@@ -342,7 +342,7 @@ Chaque étape donne quelque chose de visible et qui marche. On n'attaque pas la 
 | 1 | ✅ 2026-09-21 — Squelette : `index.html`, écran d'entrée, scène bleue avec brouillard + lumière, boucle, `lancer.command` | Un bassin vide, mais déjà « profond » |
 | 2 | ✅ 2026-09-21 — L'eau : rayons, particules, caustiques, sol (`water.js`) | Beau sans aucun animal |
 | 3 | ✅ 2026-09-21 — Les animaux : catalogue (`species.js`), chargeur + clonage de squelette (`modeles.js`), classe `Animal` (courbe Catmull-Rom + `AnimationMixer`), spawner de base, barre de chargement | Ça vit |
-| 4 | Catalogue + paliers de rareté + heure réelle (lumière qui suit l'heure) | Nuit ≠ jour |
+| 4 | ✅ 2026-09-21 — `daytime.js` (heure réelle → 8 repères de lumière interpolés, `?heure=` / `?tempo=`), spawner pondéré + heures + repos + pitié + groupes, HUD heure/phase, espèces `chirurgien` (commun, jour, ×4) et `requin-marteau` (rare, crépuscule/nuit) | Nuit ≠ jour |
 | 5 | Observation : raycast, jauge, halo, toasts ; collection localStorage | Le cœur du site |
 | 6 | Carnet : panneau, grille, fiches, silhouettes | On peut « collectionner » |
 | 7 | Audio : playlist, fondu, ambiance, sons, player, crédits | L'ambiance est là |

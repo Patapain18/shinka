@@ -1,24 +1,37 @@
 /* ============================================
    SPAWNER — le metteur en scène
    ============================================
-   Décide QUI apparaît, QUAND, et PAR OÙ. Étape 3 : tirage uniforme dans le
-   catalogue, un passage toutes les 4 à 9 s, six animaux maximum à l'écran.
-   Étape 4 : tirage pondéré par la rareté et l'heure réelle, cooldown, pitié.
+   Décide QUI apparaît, QUAND, et PAR OÙ (DESIGN.md §5) :
+   - toutes les 4 à 9 s, un tirage ; huit animaux maximum à l'écran
+   - candidats = espèces actives à cette heure ET sorties de leur temps de repos
+   - « pitié » : aucun rare/légendaire depuis 6 min → on force le tirage parmi eux
+   - tirage pondéré : commun 60 / peu commun 25 / rare 12 / légendaire 3
+   - les espèces grégaires (groupe > 1) entrent en formation lâche
    ============================================ */
 
 import * as THREE from 'three';
 import { Animal } from './animal.js';
 import { ESPECES } from './species.js';
 
-export function creerSpawner(scene, camera) {
-  const animaux = [];
-  const MAX_ANIMAUX = 6;
-  let compteur = THREE.MathUtils.randFloat(2, 5);   // secondes avant le prochain passage
+export const POIDS = { 'commun': 60, 'peu-commun': 25, 'rare': 12, 'legendaire': 3 };
+// Temps de repos après un passage, en secondes. Plus c'est rare, plus on attend :
+// revoir un légendaire trois fois de suite tuerait la magie.
+const REPOS = { 'commun': 20, 'peu-commun': 45, 'rare': 150, 'legendaire': 420 };
+const PITIE = 360;            // s sans rare ni légendaire avant d'en forcer un
+const MAX_ANIMAUX = 8;
+const RARE = (e) => e.rarete === 'rare' || e.rarete === 'legendaire';
 
-  /* Une trajectoire d'un bord à l'autre de la vitre, à une distance et une
-     hauteur propres à l'espèce, avec de légers écarts pour que ce ne soit
+export function creerSpawner(scene, camera, horloge) {
+  const animaux = [];
+  const dernierPassage = new Map();   // id d'espèce → instant (s) de son dernier passage
+  let dernierRare = 0;
+  let maintenant = 0;                 // secondes écoulées depuis l'ouverture
+  let compteur = THREE.MathUtils.randFloat(2, 5);
+
+  /* Les points d'une trajectoire d'un bord à l'autre de la vitre, à une distance
+     et une hauteur propres à l'espèce, avec de légers écarts pour que ce ne soit
      jamais une ligne droite. */
-  function trajectoirePour(espece) {
+  function pointsPour(espece) {
     const z = THREE.MathUtils.randFloat(espece.distance[0], espece.distance[1]);
     const y = THREE.MathUtils.randFloat(espece.profondeur[0], espece.profondeur[1]);
 
@@ -41,20 +54,59 @@ export function creerSpawner(scene, camera) {
         z + THREE.MathUtils.randFloatSpread(ecart * 3),
       ));
     }
-    // Catmull-Rom : une courbe lisse qui PASSE par les points (contrairement à Bézier).
-    // 'centripetal' évite les boucles quand deux points sont proches.
-    return new THREE.CatmullRomCurve3(points, false, 'centripetal');
+    return points;
+  }
+
+  // Catmull-Rom : une courbe lisse qui PASSE par les points (contrairement à Bézier).
+  // 'centripetal' évite les boucles quand deux points sont proches.
+  function courbe(points, decalage) {
+    return new THREE.CatmullRomCurve3(points.map((p) => p.clone().add(decalage)), false, 'centripetal');
+  }
+
+  function candidats() {
+    const phase = horloge.phase;
+    return ESPECES.filter((e) =>
+      e.heures.includes(phase) &&
+      maintenant - (dernierPassage.get(e.id) ?? -Infinity) >= REPOS[e.rarete]);
   }
 
   function tirer() {
-    return ESPECES[Math.floor(Math.random() * ESPECES.length)];   // étape 4 : pondéré
+    let liste = candidats();
+    if (liste.length === 0) return null;
+    if (maintenant - dernierRare > PITIE) {
+      const rares = liste.filter(RARE);
+      if (rares.length) liste = rares;              // la pitié : on force un rare
+    }
+    // Tirage pondéré : un nombre entre 0 et la somme des poids, puis on avance dans
+    // la liste en retranchant chaque poids. Une espèce de poids 60 a 60 chances
+    // sur (60 + 25 + 12 + 3) de sortir — quand toutes sont candidates.
+    const total = liste.reduce((somme, e) => somme + POIDS[e.rarete], 0);
+    let r = Math.random() * total;
+    for (const e of liste) {
+      r -= POIDS[e.rarete];
+      if (r <= 0) return e;
+    }
+    return liste[liste.length - 1];
   }
 
   function faireEntrer(espece, uDepart = 0) {
-    const animal = new Animal(espece, trajectoirePour(espece), uDepart);
-    scene.add(animal.objet);
-    animaux.push(animal);
-    return animal;
+    const points = pointsPour(espece);
+    const nb = espece.groupe;
+    const vitesse = espece.vitesse * THREE.MathUtils.randFloat(0.85, 1.15);
+    const rien = new THREE.Vector3();
+    for (let i = 0; i < nb; i++) {
+      // En groupe : même trajectoire un peu décalée, même vitesse (sinon ils se dispersent)
+      const decalage = nb > 1
+        ? new THREE.Vector3(THREE.MathUtils.randFloatSpread(1.6), THREE.MathUtils.randFloatSpread(0.8), THREE.MathUtils.randFloatSpread(1.2))
+            .multiplyScalar(espece.taille * 2)
+        : rien;
+      const animal = new Animal(espece, courbe(points, decalage), uDepart, vitesse * (nb > 1 ? THREE.MathUtils.randFloat(0.97, 1.03) : 1));
+      scene.add(animal.objet);
+      animaux.push(animal);
+    }
+    dernierPassage.set(espece.id, maintenant);
+    if (RARE(espece)) dernierRare = maintenant;
+    console.info(`→ ${espece.nom} (${espece.rarete}${nb > 1 ? `, ×${nb}` : ''}) — ${horloge.phase}`);
   }
 
   function retirer(indice) {
@@ -65,15 +117,22 @@ export function creerSpawner(scene, camera) {
   }
 
   // Peuplement initial : quand on entre, le bassin n'est jamais vide
-  for (let i = 0; i < 2; i++) faireEntrer(tirer(), THREE.MathUtils.randFloat(0.2, 0.6));
+  for (let i = 0; i < 2; i++) {
+    const espece = tirer();
+    if (espece) faireEntrer(espece, THREE.MathUtils.randFloat(0.2, 0.6));
+  }
 
   return {
     animaux,
     maj(dt) {
+      maintenant += dt;
       compteur -= dt;
       if (compteur <= 0) {
         compteur = THREE.MathUtils.randFloat(4, 9);
-        if (animaux.length < MAX_ANIMAUX) faireEntrer(tirer());
+        if (animaux.length < MAX_ANIMAUX) {
+          const espece = tirer();
+          if (espece) faireEntrer(espece);
+        }
       }
       // On parcourt à l'envers : retirer un élément ne décale pas ceux qui restent à voir
       for (let i = animaux.length - 1; i >= 0; i--) {

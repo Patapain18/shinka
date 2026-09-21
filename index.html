@@ -41,8 +41,26 @@
       <button id="btn-entrer" class="btn-entrer" type="button" disabled>Chargement…</button>
       <div class="entree-barre" aria-hidden="true"><div id="barre-chargement"></div></div>
       <p class="entree-note">Casque conseillé</p>
+      <p id="entree-erreur" class="entree-erreur" hidden></p>
     </div>
   </section>
+
+  <!-- Filet de sécurité : toute erreur JS non rattrapée s'affiche ici en clair.
+       Un visiteur comprend pourquoi ça ne démarre pas, et nous on la voit sur une capture d'écran. -->
+  <script>
+    (function () {
+      function montrer(message) {
+        var p = document.getElementById('entree-erreur');
+        p.hidden = false;
+        p.textContent = 'Une erreur est survenue : ' + message;
+      }
+      window.addEventListener('error', function (e) { montrer(e.message); });
+      window.addEventListener('unhandledrejection', function (e) { montrer(e.reason && e.reason.message ? e.reason.message : String(e.reason)); });
+    })();
+  </script>
+
+  <!-- HUD discret : l'heure et la phase du bassin (aube / jour / crépuscule / nuit) -->
+  <div class="hud" aria-hidden="true"><span id="hud-heure"></span></div>
 
   <!-- type="module" : active import/export, et le script s'exécute une fois le HTML
        parsé (pas besoin de defer ni d'attendre DOMContentLoaded). -->

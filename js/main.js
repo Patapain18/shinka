@@ -5,14 +5,16 @@
    Étape 1 : écran d'entrée, parallaxe souris, rendu du bassin vide.
    Étape 2 : l'eau (water.js) mise à jour à chaque frame.
    Étape 3 : chargement des modèles, puis le spawner fait passer les animaux.
+   Étape 4 : l'horloge (heure réelle) règle la lumière et renseigne le spawner.
    ============================================ */
 
 import * as THREE from 'three';
-import { creerRenderer, scene, camera, pointRegarde, redimensionner, BASSIN } from './scene.js';
+import { creerRenderer, scene, camera, pointRegarde, redimensionner, BASSIN, lumieres } from './scene.js';
 import { creerEau } from './water.js';
 import { ESPECES } from './species.js';
 import { chargerModeles } from './modeles.js';
 import { creerSpawner } from './spawner.js';
+import { creerHorloge } from './daytime.js';
 
 /* ---------- Le renderer, avec filet de sécurité ---------- */
 // Si WebGL est indisponible, on le dit au visiteur au lieu de lui laisser un écran noir.
@@ -34,6 +36,17 @@ try {
 /* ---------- L'eau : sol, rayons, particules ---------- */
 const eau = creerEau(scene, camera);
 
+/* ---------- L'heure réelle → la lumière ---------- */
+const horloge = creerHorloge({ scene, lumieres, eau, renderer });
+const hudHeure = document.getElementById('hud-heure');
+function majHud() {
+  const h = Math.floor(horloge.heure);
+  const m = Math.floor((horloge.heure - h) * 60);
+  hudHeure.textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} · ${horloge.phase}`;
+}
+majHud();
+setInterval(majHud, 1000);
+
 /* ---------- Chargement des modèles, puis écran d'entrée ---------- */
 // Raccourci de développement : http://localhost:8792/?direct saute l'écran d'entrée.
 // Pratique quand on retouche la scène 50 fois de suite (et pour les captures automatiques).
@@ -44,7 +57,7 @@ let spawner = null;   // n'existe qu'une fois les modèles chargés
 
 chargerModeles(ESPECES, (progression) => { barre.style.width = `${Math.round(progression * 100)}%`; })
   .then(() => {
-    spawner = creerSpawner(scene, camera);
+    spawner = creerSpawner(scene, camera, horloge);
     if (direct) { entree.remove(); return; }
     btnEntrer.disabled = false;
     btnEntrer.textContent = 'Entrer';
@@ -88,17 +101,18 @@ function majParallaxe(dt) {
 }
 
 /* ---------- Boucle ---------- */
-const horloge = new THREE.Clock();
+const chrono = new THREE.Clock();   // le chronomètre de la boucle (l'horloge du jour, c'est `horloge`)
 
 function boucle() {
   // dt = secondes écoulées depuis la frame précédente (~0.016 à 60 fps).
   // On borne à 0.1 s : si l'onglet est resté 30 s en arrière-plan, on ne veut
   // pas qu'au retour tout « saute » de 30 s d'un coup.
-  const dt = Math.min(horloge.getDelta(), 0.1);
+  const dt = Math.min(chrono.getDelta(), 0.1);
 
-  const temps = horloge.elapsedTime;   // secondes depuis le lancement (pour les shaders)
+  const temps = chrono.elapsedTime;   // secondes depuis le lancement (pour les shaders)
 
   majParallaxe(dt);
+  horloge.maj(dt);
   eau.maj(dt, temps);
   spawner?.maj(dt);               // « ?. » : ne fait rien tant que spawner vaut null
   renderer.render(scene, camera);

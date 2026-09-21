@@ -72,6 +72,9 @@ scene.add(soleil);
 const ambiance = new THREE.HemisphereLight(0x0e3a5c, 0x000000, 0.9);
 scene.add(ambiance);
 
+// Exportées pour daytime.js, qui les fait varier avec l'heure
+export const lumieres = { soleil, ambiance };
+
 /* ---------- 5) Des rochers, pour donner des repères de profondeur ---------- */
 // Sans objets étagés en distance, le brouillard n'a rien à révéler.
 // IcosahedronGeometry(rayon, 1) : une boule à 80 facettes, parfaite en rocher low-poly.

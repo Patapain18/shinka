@@ -73,7 +73,17 @@
     let mixer = null;
     new GLTFLoader().load(`../models/${modele}.glb`, (gltf) => {
       scene.add(gltf.scene);
-      const taille = new THREE.Box3().setFromObject(gltf.scene).getSize(new THREE.Vector3());
+      const boite = new THREE.Box3().setFromObject(gltf.scene);
+      const taille = boite.getSize(new THREE.Vector3());
+      // Cadrage automatique : on recule la caméra proportionnellement à la taille du modèle
+      const centre = boite.getCenter(new THREE.Vector3());
+      const rayon = taille.length() / 2;
+      const direction = camera.position.clone().normalize();
+      camera.position.copy(centre).add(direction.multiplyScalar(rayon * 2.8));
+      camera.near = rayon / 50; camera.far = rayon * 200; camera.updateProjectionMatrix();
+      controls.target.copy(centre); controls.update();
+      grille.position.y = boite.min.y - 0.01;
+      if (rayon < 0.6) scene.add(Object.assign(new THREE.GridHelper(2, 20, 0x2a4a5c, 0x16303d), { position: grille.position.clone() }));   // grille fine de 10 cm
       let triangles = 0;
       gltf.scene.traverse(o => { if (o.isMesh) triangles += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; });
       infos.textContent = `modèle : ${modele}.glb`;

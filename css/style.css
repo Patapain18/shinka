@@ -102,8 +102,8 @@ html, body {
 }
 
 .entree-erreur {
-  margin-top: 3rem;
-  max-width: 34ch;
+  margin-top: 1.6rem;
+  max-width: 44ch;
   font-size: .85rem;
   line-height: 1.6;
   color: var(--brume);
@@ -141,4 +141,16 @@ html, body {
 @keyframes apparition {
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: none; }
+}
+
+/* ---------- HUD : l'heure du bassin, en bas à gauche ---------- */
+.hud {
+  position: fixed;
+  left: 24px;
+  bottom: 20px;
+  font-size: .68rem;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: rgba(217, 236, 245, .4);
+  pointer-events: none;
 }
