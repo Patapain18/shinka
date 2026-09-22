@@ -39,8 +39,12 @@ export function creerAudio() {
   const credits = document.getElementById('credits');
 
   curseurVolume.value = prefs.volume;
+  // La partie remplie du curseur est un dégradé CSS coupé à --niveau (le navigateur ne la dessine
+  // pas lui-même une fois le style natif retiré) : on la repeint à chaque changement.
+  const peindreCurseur = () => curseurVolume.style.setProperty('--niveau', `${parseFloat(curseurVolume.value) * 100}%`);
+  peindreCurseur();
   btnMute.classList.toggle('coupe', prefs.coupe);
-  curseurVolume.addEventListener('input', () => volume(parseFloat(curseurVolume.value)));
+  curseurVolume.addEventListener('input', () => { peindreCurseur(); volume(parseFloat(curseurVolume.value)); });
   curseurVolume.addEventListener('change', () => sauverReglages({ volume: parseFloat(curseurVolume.value) }));
   btnMute.addEventListener('click', () => couper(!prefs.coupe));
   btnCredits.addEventListener('click', () => { credits.hidden = !credits.hidden; });

@@ -419,7 +419,56 @@ body.carnet-ouvert .curseur { opacity: 0; }
 .player-mute { font-size: 1rem; line-height: 1; }
 .player-mute.coupe { opacity: .4; text-decoration: line-through; }
 .player-titre { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40ch; }
-.player-volume { width: 80px; accent-color: var(--ecume); cursor: pointer; }
+/* Le curseur de volume, dessiné par nous. Un <input type="range"> natif change de forme d'un
+   navigateur à l'autre (Safari : gros bouton et piste épaisse ; Chrome : piste fine) et
+   `accent-color` n'en règle que la teinte. `appearance: none` retire le dessin natif ; on
+   redessine la piste et le bouton avec les pseudo-éléments de chaque moteur (WebKit = Chrome
+   et Safari, Gecko = Firefox). La partie « remplie » n'existe pas en standard : c'est un
+   dégradé coupé à --niveau, que audio.js met à jour à chaque changement de volume. */
+.player-volume {
+  --niveau: 60%;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 80px;
+  height: 18px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.player-volume::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--ecume) var(--niveau), rgba(217, 236, 245, .18) var(--niveau));
+}
+.player-volume::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--ecume) var(--niveau), rgba(217, 236, 245, .18) var(--niveau));
+}
+.player-volume::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;                 /* (4 px de piste − 14 px de bouton) / 2 : centré sur la piste */
+  border: 0;
+  border-radius: 50%;
+  background: var(--ecume);
+  box-shadow: 0 0 0 2px rgba(2, 7, 12, .5);
+  transition: transform .15s ease;
+}
+.player-volume::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ecume);
+  box-shadow: 0 0 0 2px rgba(2, 7, 12, .5);
+  transition: transform .15s ease;
+}
+.player-volume:hover::-webkit-slider-thumb, .player-volume:active::-webkit-slider-thumb { transform: scale(1.15); }
+.player-volume:hover::-moz-range-thumb, .player-volume:active::-moz-range-thumb { transform: scale(1.15); }
+.player-volume:focus-visible { outline: 2px solid var(--ecume); outline-offset: 3px; border-radius: 999px; }
 .player-lien { text-transform: uppercase; padding: .3rem .7rem; border: 1px solid rgba(217, 236, 245, .14); border-radius: 999px; }
 
 .credits {
