@@ -1,5 +1,7 @@
 # Shinka 進化
 
+**En ligne : https://patapain18.github.io/shinka/** (casque conseillé).
+
 Un site 3D contemplatif : on est debout devant la vitre d'un grand bassin, et on regarde
 passer la vie. Des animaux marins traversent le champ de vision — certains souvent, d'autres
 presque jamais. On peut « observer » une espèce (garder le curseur dessus, ou le doigt sur
@@ -14,6 +16,11 @@ visiteur : la nuit, d'autres espèces sortent, et les méduses luisent.
   géométrie par lofts, une peau calculée point par point (couleur, relief, brillance) en numpy, et un mouvement
   écrit comme de la biomécanique (onde de nage sur la ligne médiane, nage et glisse) — voir `DESIGN.md` §7.
 - Tout le projet est décrit dans [DESIGN.md](DESIGN.md).
+
+## Publier
+
+Le site est servi par GitHub Pages depuis la branche `main` du dépôt `Patapain18/shinka` : chaque
+`git push` met le site à jour en une à deux minutes. Rien à construire, pas de bundler.
 
 ## Lancer en local
 
